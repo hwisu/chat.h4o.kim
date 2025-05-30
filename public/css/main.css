@@ -1,0 +1,5 @@
+/* Main CSS file - imports all component styles */
+@import url('./base.css');
+@import url('./terminal-chat.css');
+@import url('./markdown.css');
+@import url('./responsive.css');

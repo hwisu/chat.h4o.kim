@@ -1,0 +1,141 @@
+/* Markdown rendering styles */
+.message-content pre.code-block,
+.message-content code.inline-code {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    font-family: inherit;
+    color: #00ff00;
+}
+
+.message-content pre.code-block {
+    border-radius: 4px;
+    padding: 12px;
+    margin: 8px 0;
+    overflow-x: auto;
+}
+
+.message-content code.inline-code {
+    border-radius: 2px;
+    padding: 2px 4px;
+}
+
+.message-content .md-h1,
+.message-content .md-h2,
+.message-content .md-h3 {
+    color: #00ff00;
+    font-weight: bold;
+    margin: 16px 0 8px 0;
+    border-bottom: 1px solid #333;
+    padding-bottom: 4px;
+}
+
+.message-content .md-h1 { font-size: 1.4em; }
+.message-content .md-h2 { font-size: 1.2em; }
+.message-content .md-h3 { font-size: 1.1em; }
+
+.message-content .md-ul,
+.message-content ol {
+    margin: 8px 0;
+    padding-left: 0;
+    list-style: none;
+}
+
+.message-content ol {
+    counter-reset: list-counter;
+}
+
+.message-content .md-li,
+.message-content ol li {
+    margin: 4px 0;
+    padding-left: 30px;
+    position: relative;
+}
+
+.message-content ol li {
+    counter-increment: list-counter;
+}
+
+.message-content .md-li::before {
+    content: "•";
+    color: #00ff00;
+    position: absolute;
+    left: 0;
+    top: 0;
+    min-width: 25px;
+}
+
+.message-content ol li::before {
+    content: counter(list-counter) ".";
+    color: #00ff00;
+    position: absolute;
+    left: 0;
+    top: 0;
+    font-weight: bold;
+    min-width: 25px;
+}
+
+.message-content ol ol,
+.message-content ul ul,
+.message-content ol ul,
+.message-content ul ol {
+    margin: 4px 0;
+    padding-left: 20px;
+}
+
+.message-content .md-link {
+    color: #0088ff;
+    text-decoration: underline;
+}
+
+.message-content .md-link:hover {
+    color: #00aaff;
+}
+
+.message-content strong {
+    color: #00ff00;
+    font-weight: bold;
+}
+
+.message-content em {
+    color: #ffaa00;
+    font-style: italic;
+}
+
+.message-content blockquote {
+    border-left: 3px solid #00ff00;
+    margin: 8px 0;
+    padding-left: 12px;
+    color: #ccc;
+    font-style: italic;
+}
+
+.message-content table {
+    border-collapse: collapse;
+    margin: 8px 0;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    display: block;
+    white-space: nowrap;
+}
+
+.message-content table thead,
+.message-content table tbody {
+    display: table;
+    width: 100%;
+    table-layout: fixed;
+}
+
+.message-content table th,
+.message-content table td {
+    border: 1px solid #333;
+    padding: 6px 8px;
+    text-align: left;
+    display: table-cell;
+}
+
+.message-content table th {
+    background: #1a1a1a;
+    color: #00ff00;
+    font-weight: bold;
+}

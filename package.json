@@ -1,0 +1,37 @@
+{
+  "name": "terminal-openrouter-chat",
+  "version": "1.0.0",
+  "description": "Terminal-style chat interface using OpenRouter free models with Korean language optimization",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev --local",
+    "dev:remote": "wrangler dev",
+    "prebuild": "node scripts/build.js",
+    "build": "tsc",
+    "predeploy": "node scripts/build.js",
+    "deploy": "wrangler deploy",
+    "deploy:prod": "npm run predeploy && wrangler deploy --env production",
+    "type-check": "tsc --noEmit",
+    "start": "wrangler dev",
+    "preview": "wrangler dev --local",
+    "version-inject": "node scripts/build.js"
+  },
+  "keywords": [
+    "cloudflare-workers",
+    "openrouter",
+    "ai-chat",
+    "terminal",
+    "korean",
+    "typescript"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241218.0",
+    "typescript": "^5.3.0",
+    "wrangler": "^4.17.0"
+  },
+  "dependencies": {
+    "hono": "^4.0.0"
+  }
+}
