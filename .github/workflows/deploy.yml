@@ -3,9 +3,6 @@ name: Deploy to Cloudflare Workers
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
-  workflow_dispatch:
 
 jobs:
   deploy:
@@ -29,12 +26,7 @@ jobs:
 
     - name: Inject version information
       run: |
-        echo "🔧 Injecting version info..."
         node scripts/build.js
-
-        # Show injected version for debugging
-        echo "📋 Injected Git hash: $(git rev-parse --short HEAD)"
-        echo "📋 Build timestamp: $(date -u +%s)000"
 
     - name: Deploy to Cloudflare Workers (Production)
       if: github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -42,25 +34,4 @@ jobs:
       with:
         apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        command: deploy --env production
-
-    - name: Deploy to Cloudflare Workers (Preview)
-      if: github.event_name == 'pull_request'
-      uses: cloudflare/wrangler-action@v3
-      with:
-        apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        command: deploy --env development
-
-    - name: Comment on PR
-      if: github.event_name == 'pull_request'
-      uses: actions/github-script@v7
-      with:
-        script: |
-          const gitHash = '${{ github.sha }}'.substring(0, 7);
-          github.rest.issues.createComment({
-            issue_number: context.issue.number,
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            body: `🚀 Preview deployment complete!\n\n**Version:** \`${gitHash}\`\n**Preview URL:** https://terminal-chat-dev.hwitticus.workers.dev\n\n*Note: This preview includes automatic version checking and will force refresh when a new version is deployed.*`
-          });
+        command: deploy --env

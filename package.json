@@ -1,7 +1,7 @@
 {
-  "name": "terminal-openrouter-chat",
-  "version": "1.0.0",
-  "description": "Terminal-style chat interface using OpenRouter free models with Korean language optimization",
+  "name": "chatty",
+  "version": "1.0.1",
+  "description": "Chatty is a terminal-style chat interface using OpenRouter free models with Korean language optimization",
   "main": "src/index.ts",
   "scripts": {
     "dev": "wrangler dev --local",
