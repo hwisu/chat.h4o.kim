@@ -722,7 +722,7 @@ chat.post('/chat', async (c) => {
       
       // Add conversation history
       if (conversationHistory && conversationHistory.length > 0) {
-        conversationHistory.forEach(msg => {
+        conversationHistory.forEach((msg: { role: string, content: string, timestamp?: number }) => {
           if (msg.role === 'user' || msg.role === 'assistant') {
             messages.push({
               role: msg.role,
