@@ -290,7 +290,22 @@ async function checkAuthenticationOrUserKey(c: any): Promise<boolean> {
     return true;
   }
   
-  // Otherwise, check server authentication
+  // Check for session token first (new method)
+  const sessionToken = c.req.header('X-Session-Token');
+  if (sessionToken) {
+    try {
+      const encryptionSecret = c.env.OPENROUTER_API_KEY?.slice(0, 16) || 'default-secret-key';
+      const decryptedPassword = await decryptPassword(sessionToken, encryptionSecret);
+      if (decryptedPassword === c.env.ACCESS_PASSWORD) {
+        console.log('Access granted with session token');
+        return true;
+      }
+    } catch (error) {
+      console.warn('Failed to verify session token:', error);
+    }
+  }
+  
+  // Otherwise, check server authentication (legacy cookie method)
   const accessPassword = c.env.ACCESS_PASSWORD
   const encryptionSecret = c.env.OPENROUTER_API_KEY?.slice(0, 16) || 'default-secret-key';
 
@@ -334,6 +349,7 @@ async function checkAuthenticationOrUserKey(c: any): Promise<boolean> {
     hasHeader: !!headerPassword,
     hasCookie: !!encryptedCookie,
     hasUserKey: !!userApiKey,
+    hasSessionToken: !!sessionToken,
     authenticated: isAuthenticated
   });
 
@@ -543,11 +559,13 @@ chat.post('/login', async (c) => {
 
     if (password === accessPassword) {
       const encryptedToken = await encryptPassword(password, encryptionSecret);
-      c.header('Set-Cookie', `auth_token=${encryptedToken}; Path=/; Max-Age=86400; HttpOnly; SameSite=Strict`);
+      // Remove cookie setting, use session token instead
+      // c.header('Set-Cookie', `auth_token=${encryptedToken}; Path=/; Max-Age=86400; HttpOnly; SameSite=Lax`);
 
       return c.json({
         login_success: true,
-        response: `✅ Server authentication successful! Welcome to Chatty.\n\n📡 You're now using the server's API key for free access.\n\n🔑 API Key Options:\n• Continue with server key (current)\n• Switch to personal key: /set-api-key <your-key>\n• Check status: /api-key-status\n\nCommands:\n  /models - List available models\n  /set-model <model-id> - Set current model\n  /clear - Clear conversation history\n  /help - Show all commands\n\n💬 Type your message to start chatting!\n\n🧠 Enhanced Features:\n• Conversation context maintained\n• Optimized AI parameters\n• Better response quality`
+        session_token: encryptedToken, // Send token to client for session storage
+        response: `✅ Server authentication successful! Welcome to Chatty.\n\n📡 You're now using the server's API key for free access.\n\n🔑 API Key Options:\n• Continue with server key (current)\n• Switch to personal key: /set-api-key <your-key>\n• Check status: /api-key-status\n\nCommands:\n  /models - List available models\n  /set-model <model-id> - Set current model\n  /clear - Clear conversation history\n  /help - Show all commands\n\n💬 Type your message to start chatting!\n\n🧠 Enhanced Features:\n• Conversation context maintained\n• Optimized AI parameters\n• Better response quality\n\n💡 This session will expire when you close the tab.`
       });
     } else {
       return c.json({
@@ -568,6 +586,36 @@ chat.get('/help', async (c) => {
   return c.json({
     success: true,
     response: `📖 Chatty Commands:\n\n🔐 Authentication:\n/login <password>          - Authenticate with server\n\n🔑 API Key Management:\n/set-api-key <key>         - Set your personal OpenRouter API key\n/remove-api-key            - Remove personal API key (use server key)\n/api-key-status            - Check current API key status\n\n🤖 Model Commands:\n/models                    - List available AI models\n/set-model <id>            - Set specific model\n/set-model auto            - Use auto-selection\n\n💬 Chat Commands:\n/clear                     - Clear conversation history\n/help                      - Show this help\n\n💡 Features:\n• Personal API key support (stored locally & encrypted)\n• Conversation context maintained across messages\n• Optimized parameters for better responses\n• Smart token management\n\n🌐 Get your API key: https://openrouter.ai/settings/keys`
+  });
+});
+
+// GET /api/auth-status - 인증 상태 확인 (alternative endpoint)
+chat.get('/auth-status', async (c) => {
+  const userApiKey = c.req.header('X-User-API-Key');
+  const hasUserKey = userApiKey && userApiKey.startsWith('sk-or-v1-');
+  
+  if (hasUserKey) {
+    return c.json({
+      authenticated: true,
+      auth_method: 'user_api_key',
+      auth_type: 'Personal API Key'
+    });
+  }
+
+  const isServerAuth = await checkAuthenticationOrUserKey(c);
+  
+  if (isServerAuth) {
+    return c.json({
+      authenticated: true,
+      auth_method: 'server_password',
+      auth_type: 'Server Password'
+    });
+  }
+
+  return c.json({
+    authenticated: false,
+    auth_method: null,
+    auth_type: null
   });
 });
 
@@ -615,28 +663,71 @@ chat.post('/chat', async (c) => {
   try {
     const requestBody: any = await c.req.json();
     
-    // Handle compressed data - support LZ-String and fallback compression
+    console.log('📥 Chat request received:', {
+      hasMessage: !!requestBody.message,
+      hasModel: !!requestBody.model,
+      hasConversationHistory: !!requestBody.conversationHistory,
+      hasCompressed: !!requestBody.compressed,
+      hasH: !!requestBody.h,
+      hasB: !!requestBody.b,
+      bodyKeys: Object.keys(requestBody)
+    });
+    
+    // Handle compressed data - support LZ-String and enhanced field shortening
     let decompressedData = requestBody;
     
     if (requestBody.compressed && requestBody.compression_method === 'lz-string') {
       // Handle LZ-String compressed data
       try {
         console.log('Decompressing LZ-String data...');
-        // For simplicity, let client handle LZ-String compression/decompression
-        // Server will work with the compressed payload as-is for now
-        // In production, you might want to decompress server-side
-        console.log('LZ-String compression detected, using fallback decompression');
+        // The client sends compressed history and raw message
         decompressedData = {
           message: requestBody.m || requestBody.message,
-          conversationHistory: requestBody.h || requestBody.conversationHistory || []
+          conversationHistory: [], // Will be decompressed from h if needed
+          model: requestBody.model,
+          temperature: requestBody.temperature,
+          max_tokens: requestBody.max_tokens,
+          top_p: requestBody.top_p,
+          frequency_penalty: requestBody.frequency_penalty,
+          presence_penalty: requestBody.presence_penalty
         };
+        
+        // For now, let client handle LZ-String decompression
+        // This keeps server-side simple while enabling compression
+        console.log('LZ-String compression detected, message extracted');
       } catch (error) {
         console.warn('LZ-String decompression failed:', error);
         decompressedData = requestBody;
       }
-    } else if (requestBody.c) {
-      // Handle fallback compression (field name shortening)
+    } else if (requestBody.h && Array.isArray(requestBody.h)) {
+      // Handle enhanced field shortening compression
       interface CompressedMessage {
+        r: string;
+        c: string;
+        t: number;
+      }
+      
+      const baseTimestamp = requestBody.b || 0;
+      
+      decompressedData = {
+        message: requestBody.m || requestBody.message,
+        conversationHistory: requestBody.h.map((msg: CompressedMessage) => ({
+          role: msg.r === 'u' ? 'user' : 'assistant',
+          content: msg.c,
+          timestamp: msg.t + baseTimestamp
+        })),
+        model: requestBody.model,
+        temperature: requestBody.temperature,
+        max_tokens: requestBody.max_tokens,
+        top_p: requestBody.top_p,
+        frequency_penalty: requestBody.frequency_penalty,
+        presence_penalty: requestBody.presence_penalty
+      };
+      
+      console.log(`📦 Decompressed ${requestBody.h.length} messages from field-shortened format`);
+    } else if (requestBody.c) {
+      // Handle legacy fallback compression (field name shortening)
+      interface LegacyCompressedMessage {
         r: string;
         c: string;
         t: number;
@@ -644,7 +735,7 @@ chat.post('/chat', async (c) => {
       
       decompressedData = {
         message: requestBody.m,
-        conversationHistory: (requestBody.h || []).map((msg: CompressedMessage) => ({
+        conversationHistory: (requestBody.h || []).map((msg: LegacyCompressedMessage) => ({
           role: msg.r,
           content: msg.c,
           timestamp: msg.t
@@ -677,8 +768,8 @@ chat.post('/chat', async (c) => {
 
       let selectedModel = selectedModelCookie || model || 'meta-llama/llama-3.1-8b-instruct:free';
 
-      // Auto-select if no specific model
-      if (!selectedModelCookie && !model) {
+      // Auto-select if model is 'auto' or no specific model set
+      if (selectedModel === 'auto' || (!selectedModelCookie && !model)) {
         try {
           // Check cache first for auto-selection
           let freeModels: OpenRouterModel[] = [];
@@ -711,9 +802,11 @@ chat.post('/chat', async (c) => {
             // Use the same priority system as filterFreeModels
             // Models are already sorted by priority: meta > google > gemma, then by context size
             selectedModel = freeModels[0].id;
+            console.log(`🎯 Auto-selected model: ${selectedModel}`);
           }
         } catch (error) {
           console.warn('Auto-selection failed:', error);
+          selectedModel = 'meta-llama/llama-3.1-8b-instruct:free'; // fallback
         }
       }
 
@@ -738,7 +831,26 @@ chat.post('/chat', async (c) => {
         content: message
       });
 
+      console.log(`🤖 Chat request: ${selectedModel}, ${messages.length} messages, ${JSON.stringify(messages).length} chars`);
+
       // Optimized chat request with enhanced parameters
+      const chatRequestBody = {
+        model: selectedModel,
+        messages: messages,
+        max_tokens: max_tokens,
+        temperature: temperature,
+        top_p: top_p,
+        frequency_penalty: frequency_penalty,
+        presence_penalty: presence_penalty,
+        stream: false // Future: could implement streaming
+      };
+      
+      console.log('📤 OpenRouter request:', {
+        model: selectedModel,
+        messageCount: messages.length,
+        bodySize: JSON.stringify(chatRequestBody).length
+      });
+
       const chatResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -748,16 +860,7 @@ chat.post('/chat', async (c) => {
           'X-Title': 'Chatty',
           'Accept-Encoding': 'gzip, deflate, br'
         },
-        body: JSON.stringify({
-          model: selectedModel,
-          messages: messages,
-          max_tokens: max_tokens,
-          temperature: temperature,
-          top_p: top_p,
-          frequency_penalty: frequency_penalty,
-          presence_penalty: presence_penalty,
-          stream: false // Future: could implement streaming
-        }),
+        body: JSON.stringify(chatRequestBody),
         // Cloudflare-specific optimizations
         cf: {
           cacheTtl: 0, // Don't cache chat responses
@@ -767,6 +870,13 @@ chat.post('/chat', async (c) => {
 
       if (!chatResponse.ok) {
         const errorText = await chatResponse.text();
+        console.error('❌ OpenRouter API error:', {
+          status: chatResponse.status,
+          statusText: chatResponse.statusText,
+          errorText: errorText,
+          model: selectedModel,
+          messageCount: messages.length
+        });
         
         if (chatResponse.status === 401) {
           return c.json({
@@ -788,15 +898,25 @@ chat.post('/chat', async (c) => {
         return c.json({ error: 'Invalid response structure' }, 500);
       }
 
-      // Optimized response with compression hints
-      const response = c.json({
+      // Log token usage for monitoring
+      if (chatData.usage) {
+        console.log(`📊 Token usage: ${chatData.usage.prompt_tokens} prompt + ${chatData.usage.completion_tokens} completion = ${chatData.usage.total_tokens} total`);
+      }
+
+      // Enhanced response with token usage information
+      const responseData = {
         response: chatData.choices[0].message.content || '',
         model: selectedModel,
-      });
+        usage: chatData.usage, // Pass through actual token usage from OpenRouter
+        timestamp: Date.now()
+      };
 
-      // Add compression headers
-      response.headers.set('Content-Encoding', 'gzip');
+      // Create optimized response
+      const response = c.json(responseData);
+
+      // Add compression headers for client optimization
       response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+      response.headers.set('Pragma', 'no-cache');
 
       return response;
 

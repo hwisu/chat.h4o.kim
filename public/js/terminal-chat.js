@@ -2,59 +2,46 @@
 class TerminalChat {
     constructor() {
         this.output = document.getElementById('output');
-        this.messageInput = document.getElementById('messageInput');
-        this.inputSpinner = document.getElementById('inputSpinner');
+        this.input = document.getElementById('messageInput');
+        this.sendButton = document.getElementById('sendButton');
+        this.modelSelector = document.getElementById('modelSelector');
+        this.modelList = document.getElementById('modelList');
+        this.contextUsage = document.getElementById('contextUsage');
+        this.authButton = document.getElementById('authButton');
+        this.authModal = document.getElementById('authModal');
+        this.apiKeyModal = document.getElementById('apiKeyModal');
+        this.authPasswordInput = document.getElementById('authPassword');
+        this.apiKeyInput = document.getElementById('apiKey');
         this.statusIndicator = document.getElementById('statusIndicator');
         this.authStatus = document.getElementById('authStatus');
-        this.contextUsage = document.getElementById('contextUsage');
-        this.sendButton = document.getElementById('sendButton');
         this.modelModal = document.getElementById('modelModal');
         this.modelModalClose = document.getElementById('modelModalClose');
-        this.modelList = document.getElementById('modelList');
+        this.modelTitle = document.getElementById('modelTitle');
+        this.inputSpinner = document.getElementById('inputSpinner');
 
-        // Check for missing DOM elements
-        const requiredElements = [
-            { element: this.output, name: 'output' },
-            { element: this.messageInput, name: 'messageInput' },
-            { element: this.sendButton, name: 'sendButton' }
-        ];
-
-        const missingElements = requiredElements.filter(item => !item.element);
-        if (missingElements.length > 0) {
-            console.error('Missing required DOM elements:', missingElements.map(item => item.name));
-        }
-
-        // Warn about optional missing elements
-        if (!this.statusIndicator) console.warn('statusIndicator element not found');
-        if (!this.authStatus) console.warn('authStatus element not found');
-        if (!this.inputSpinner) console.warn('inputSpinner element not found');
-
-        this.authenticated = false;
+        this.selectedModel = localStorage.getItem('selectedModel') || 'auto';
+        this.selectedModelInfo = null;
+        this.conversationHistory = [];
+        this.isAuthenticated = false;
         this.availableModels = [];
-        this.selectedModel = null;
-        this.currentModelIndex = 0;
         this.isLoading = false;
 
-        // Model information with context sizes
-        this.selectedModelInfo = {
-            id: null,
-            context_length: 128000 // Default context size
-        };
-
-        // Conversation management - simplified to use only model context size
-        this.conversationHistory = [];
         this.maxContextSize = 128000; // Will be dynamically set based on selected model
-        this.currentTokenUsage = 0; // Current actual token usage
+        this.currentTokenUsage = 0; // Current actual token usage (from server)
+        this.estimatedTokenUsage = 0; // Estimated usage (client-side)
         
         // Compression settings for efficient communication
         this.enableCompression = true;
-        this.compressionMinSize = 1000; // Only compress messages over 1KB
-        this.preferZstdCompression = true; // Try ZSTD first, fallback to simple compression
-        this.zstdAvailable = false; // Will be set after initialization
+        this.compressionMinSize = 500; // Compress messages over 500 bytes
+        this.compressionMethod = 'auto'; // auto, field-shortening, lz-string
+        this.lzStringAvailable = false;
 
         // User API key management
         this.userApiKey = null;
         this.encryptionKey = 'chatty-h4o-2025'; // Simple key for local encryption
+        
+        // Session-based authentication (disappears when tab closes)
+        this.sessionToken = null;
 
         // Authentication and context tracking
         this.authMethod = null;
@@ -74,7 +61,7 @@ class TerminalChat {
             this.lzStringAvailable = true;
         } else {
             console.warn('⚠️ LZ-String library not available, using fallback compression');
-            this.preferZstdCompression = false;
+            this.compressionMethod = 'field-shortening';
         }
 
         this.init();
@@ -82,8 +69,8 @@ class TerminalChat {
 
     // iOS version detection for compatibility
     getIOSVersion() {
-        const match = navigator.userAgent.match(/OS (\d+)_(\d+)/);
-        return match ? parseInt(match[1], 10) : 0;
+        const match = navigator.userAgent.match(/OS (\d+)_/);
+        return match ? parseInt(match[1]) : 0;
     }
 
     init() {
@@ -102,14 +89,17 @@ class TerminalChat {
         this.selectedModel = this.getStoredModel();
         this.userApiKey = this.getStoredUserApiKey();
         
+        // Restore session token if available
+        this.sessionToken = sessionStorage.getItem('session_token');
+        
         // Set initial UI state (will be updated after server verification)
         this.updateModelTitle();
         this.setupEventListeners();
         this.updateSendButton();
         this.autoResizeTextarea();
 
-        if (this.messageInput) {
-            this.messageInput.focus();
+        if (this.input) {
+            this.input.focus();
         }
 
         // iOS 18 specific initialization
@@ -178,7 +168,7 @@ class TerminalChat {
         }
 
         // iOS 18 enhanced input focus handling
-        this.messageInput.addEventListener('focusin', () => {
+        this.input.addEventListener('focusin', () => {
             if (this.isIOS18Plus) {
                 setTimeout(() => {
                     this.scrollToBottom();
@@ -230,6 +220,9 @@ class TerminalChat {
                 if (this.userApiKey) {
                     headers['X-User-API-Key'] = this.userApiKey;
                 }
+                if (this.sessionToken) {
+                    headers['X-Session-Token'] = this.sessionToken;
+                }
 
                 const response = await fetch('/api/models', {
                     method: 'GET',
@@ -273,6 +266,9 @@ class TerminalChat {
             if (this.userApiKey) {
                 headers['X-User-API-Key'] = this.userApiKey;
             }
+            if (this.sessionToken) {
+                headers['X-Session-Token'] = this.sessionToken;
+            }
 
             const response = await fetch('/api/set-model', {
                 method: 'POST',
@@ -300,23 +296,16 @@ class TerminalChat {
 
     getStoredModels() {
         try {
-            const cached = localStorage.getItem('cached-models');
-            if (cached) {
-                const data = JSON.parse(cached);
-                if (Date.now() - data.timestamp < 5 * 60 * 1000) {
-                    return data.models;
-                }
-            }
-        } catch (error) {
-            console.warn('Failed to parse cached models:', error);
+            const stored = localStorage.getItem('cached-models');
+            return stored ? JSON.parse(stored) : [];
+        } catch {
+            return [];
         }
-        return [];
     }
 
     setStoredModels(models) {
         try {
-            const data = { models: models, timestamp: Date.now() };
-            localStorage.setItem('cached-models', JSON.stringify(data));
+            localStorage.setItem('cached-models', JSON.stringify(models));
         } catch (error) {
             console.warn('Failed to cache models:', error);
         }
@@ -329,7 +318,7 @@ class TerminalChat {
             existingAuth.remove();
         }
 
-        if (!this.authenticated && !this.userApiKey) {
+        if (!this.isAuthenticated && !this.userApiKey) {
             // Show options for authentication OR API key
             this.addSystemMessage(`🔐 Choose your access method:\n\n📡 Option 1: Server Login\n• Use /login <password> to authenticate\n• Uses server's API key (free access)\n\n🔑 Option 2: Personal API Key\n• Use /set-api-key <your-key> to set your own key\n• Uses your OpenRouter account and quota\n• Get your key: https://openrouter.ai/settings/keys\n\n💡 You only need to choose ONE option!`, 'auth-required-message');
             return;
@@ -339,7 +328,7 @@ class TerminalChat {
             let accessMethod = '';
             if (this.userApiKey) {
                 accessMethod = '🔑 Using your personal API key';
-            } else if (this.authenticated) {
+            } else if (this.isAuthenticated) {
                 accessMethod = '📡 Using server API key';
             }
             
@@ -348,20 +337,20 @@ class TerminalChat {
     }
 
     setAuthenticated(authenticated) {
-        this.authenticated = authenticated;
+        this.isAuthenticated = authenticated;
         if (authenticated) {
             if (this.statusIndicator) {
                 this.statusIndicator.classList.add('authenticated');
             }
             if (this.authStatus) {
-                this.authStatus.textContent = 'Authenticated';
-                this.authStatus.style.color = '#00aa00';
+                this.authStatus.textContent = '🔑 Personal API Key';
+                this.authStatus.style.color = '#00ff00';
             }
 
-            const authMsg = document.querySelector('.auth-required-message');
-            if (authMsg) {
-                authMsg.remove();
-            }
+            // Load models when authenticated
+            this.loadModelsBackground();
+            // Update welcome message to remove auth prompts
+            this.updateWelcomeMessage();
         } else {
             if (this.statusIndicator) {
                 this.statusIndicator.classList.remove('authenticated');
@@ -375,6 +364,8 @@ class TerminalChat {
                     this.authStatus.style.color = '#666';
                 }
             }
+            // Update welcome message to show auth prompts
+            this.updateWelcomeMessage();
         }
     }
 
@@ -391,21 +382,21 @@ class TerminalChat {
             modelTitle.style.cursor = 'pointer';
         }
 
-        this.messageInput.addEventListener('compositionstart', () => {
+        this.input.addEventListener('compositionstart', () => {
             this.isComposing = true;
         });
 
-        this.messageInput.addEventListener('compositionend', () => {
+        this.input.addEventListener('compositionend', () => {
             this.isComposing = false;
         });
 
-        this.messageInput.addEventListener('keydown', (e) => {
+        this.input.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 if (e.shiftKey) {
                     return; // Allow line break
                 } else {
                     e.preventDefault();
-                    const messageText = this.messageInput.value.trim();
+                    const messageText = this.input.value.trim();
 
                     if (!this.isComposing && messageText && !this.isLoading) {
                         this.sendMessage();
@@ -414,7 +405,7 @@ class TerminalChat {
             }
         });
 
-        this.messageInput.addEventListener('input', () => {
+        this.input.addEventListener('input', () => {
             this.autoResizeTextarea();
             this.updateSendButton();
         });
@@ -422,19 +413,19 @@ class TerminalChat {
         // Enhanced send button events for iOS 18
         this.setupSendButtonEvents();
 
-        this.messageInput.focus();
+        this.input.focus();
         this.handleViewportChanges();
 
         // Model modal event listeners
-        if (this.modelModalClose) {
-            this.modelModalClose.addEventListener('click', () => {
+        if (this.apiKeyModalClose) {
+            this.apiKeyModalClose.addEventListener('click', () => {
                 this.hideModelModal();
             });
         }
 
-        if (this.modelModal) {
-            this.modelModal.addEventListener('click', (e) => {
-                if (e.target === this.modelModal) {
+        if (this.apiKeyModal) {
+            this.apiKeyModal.addEventListener('click', (e) => {
+                if (e.target === this.apiKeyModal) {
                     this.hideModelModal();
                 }
             });
@@ -442,7 +433,7 @@ class TerminalChat {
 
         // ESC key to close modal
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && this.modelModal.classList.contains('show')) {
+            if (e.key === 'Escape' && this.apiKeyModal.classList.contains('show')) {
                 this.hideModelModal();
             }
         });
@@ -489,7 +480,7 @@ class TerminalChat {
         window.addEventListener('resize', ensureScrollToBottom);
 
         // Enhanced focus handling for iOS 18
-        this.messageInput.addEventListener('focus', () => {
+        this.input.addEventListener('focus', () => {
             if (this.isIOS18Plus) {
                 setTimeout(ensureScrollToBottom, 300);
             } else {
@@ -497,7 +488,7 @@ class TerminalChat {
             }
         });
 
-        this.messageInput.addEventListener('blur', ensureScrollToBottom);
+        this.input.addEventListener('blur', ensureScrollToBottom);
 
         // iOS 18 orientation change handling
         if (this.isIOS18Plus) {
@@ -511,308 +502,424 @@ class TerminalChat {
     }
 
     async sendMessage() {
-        const message = this.messageInput.value.trim();
+        if (this.isLoading) return;
 
-        if (!message || this.isLoading) {
+        const userInput = this.input.value.trim();
+        if (!userInput) return;
+
+        // Handle commands first
+        if (userInput.startsWith('/')) {
+            await this.handleCommand(userInput);
             return;
         }
 
-        this.isLoading = true;
+        // Show user message
+        this.addMessage(userInput, 'user');
+        this.input.value = '';
 
-        this.addUserMessage(message);
-        this.messageInput.value = '';
-        this.autoResizeTextarea();
-        this.updateSendButton();
+        this.isLoading = true;
         this.showLoading();
 
         try {
-            const startTime = performance.now();
-            let response, data;
+            // Prepare messages for API
+            const messages = this.prepareMessagesForAPI(userInput);
+            
+            // Compress conversation history if needed
+            const compressionResult = this.compressConversationHistory(this.conversationHistory);
+            
+            // Prepare request data
+            let requestData = {
+                message: userInput,
+                model: this.selectedModel,
+                temperature: 0.7,
+                max_tokens: 1500,
+                top_p: 0.9,
+                frequency_penalty: 0.1,
+                presence_penalty: 0.1
+            };
 
-            if (message.startsWith('/')) {
-                const result = await this.handleCommand(message);
-                response = { ok: result.success };
-                data = result.data;
+            // Add compression data based on method
+            if (compressionResult.method === 'lz-string') {
+                requestData.compressed = true;
+                requestData.compression_method = 'lz-string';
+                requestData.h = compressionResult.data;
+                requestData.m = userInput;
+            } else if (compressionResult.method === 'field-shortening') {
+                // Use field shortening format
+                requestData.h = JSON.parse(compressionResult.data).m;
+                requestData.b = JSON.parse(compressionResult.data).b;
             } else {
-                // Add user message to conversation history (only for non-commands)
-                this.addToConversationHistory('user', message);
-
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-                // Prepare headers with user API key if available
-                const headers = { 'Content-Type': 'application/json' };
-                if (this.userApiKey) {
-                    headers['X-User-API-Key'] = this.userApiKey;
+                // No compression - only add conversationHistory if it has content
+                if (this.conversationHistory && this.conversationHistory.length > 0) {
+                    requestData.conversationHistory = this.conversationHistory;
                 }
-
-                // Prepare messages with current context and calculate tokens
-                const messagesForAPI = this.prepareMessagesForAPI(message);
-
-                // Prepare and compress payload
-                const payload = {
-                    message: message,
-                    conversationHistory: this.conversationHistory
-                };
-                const compressedPayload = this.compressData(payload);
-
-                try {
-                    response = await fetch('/api/chat', {
-                        method: 'POST',
-                        headers: headers,
-                        body: JSON.stringify(compressedPayload),
-                        signal: controller.signal
-                    });
-                    clearTimeout(timeoutId);
-                } catch (fetchError) {
-                    clearTimeout(timeoutId);
-                    throw fetchError;
-                }
-
-                data = await response.json();
             }
 
-            const responseTime = performance.now() - startTime;
+            // Prepare headers
+            const headers = { 'Content-Type': 'application/json' };
+            if (this.userApiKey) {
+                headers['X-User-API-Key'] = this.userApiKey;
+            }
+            if (this.sessionToken) {
+                headers['X-Session-Token'] = this.sessionToken;
+            }
 
-            if (response.ok) {
-                if (data.login_success) {
-                    this.setAuthenticated(true);
-                    // Update authentication info after successful login
-                    await this.updateAuthenticationInfo();
-                    // Show login success message
-                    let accessMethod = '';
-                    if (this.userApiKey) {
-                        accessMethod = '🔑 Using your personal API key';
-                    } else {
-                        accessMethod = '📡 Using server API key';
-                    }
-                    this.addSystemMessage(`✅ Authentication successful! You are now logged in.\n\n${accessMethod}`, 'login-success-message');
-                    
-                    // Reload models after successful login
-                    this.availableModels = []; // Clear cache to force refresh
-                    this.loadModelsBackground();
-                }
-                if (data.response && !data.login_success) {
-                    // Add assistant response to conversation history
-                    this.addToConversationHistory('assistant', data.response);
-                    this.addAssistantMessage(data.response, data.model, data.korean_optimized);
-                }
-            } else {
-                if (response.status === 401 || data.auth_required) {
+            const response = await fetch('/api/chat', {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify(requestData)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                
+                if (response.status === 401) {
                     this.setAuthenticated(false);
-                    // Clear any cached models when auth fails
-                    this.availableModels = [];
-                    localStorage.removeItem('cached-models');
-                    
-                    if (message.startsWith('/login')) {
-                        this.addErrorMessage(data.response || 'Authentication failed. Please check your password.');
-                    } else {
-                        this.addErrorMessage('Authentication required. Use /login <password> to authenticate.');
-                    }
-                } else {
-                    this.addErrorMessage(data.error || `Server error (${response.status}): ${response.statusText}`);
+                    this.addMessage(errorData.response || '❌ Authentication required. Please login first.', 'error');
+                    return;
                 }
+                
+                throw new Error(errorData.error || `HTTP ${response.status}`);
             }
-        } catch (error) {
-            console.error('Error sending message:', error);
-            if (error.name === 'AbortError') {
-                this.addErrorMessage('Request timeout. Please try again.');
-            } else {
-                this.addErrorMessage('Network error: ' + error.message);
-            }
-        } finally {
-            this.hideLoading();
-            this.isLoading = false;
-            this.updateSendButton();
 
-            if (!('ontouchstart' in window) || document.activeElement === this.messageInput) {
-                this.messageInput.focus();
+            const data = await response.json();
+            
+            if (!data.response) {
+                throw new Error('Empty response from server');
             }
+
+            // Add assistant response to conversation
+            this.addMessage(data.response, 'assistant');
+            
+            // Update actual token usage if provided by server
+            if (data.usage) {
+                const totalTokens = data.usage.total_tokens || (data.usage.prompt_tokens + data.usage.completion_tokens);
+                this.currentTokenUsage = totalTokens;
+                
+                // Add assistant message with actual token count
+                this.addToConversationHistory('assistant', data.response, data.usage.completion_tokens);
+                
+                console.log(`📊 Token usage: ${data.usage.prompt_tokens} prompt + ${data.usage.completion_tokens} completion = ${totalTokens} total`);
+            } else {
+                // Fallback to estimated tokens
+                this.addToConversationHistory('assistant', data.response);
+            }
+            
+            // Update context display
+            this.updateContextDisplay();
+
+        } catch (error) {
+            console.error('Chat error:', error);
+            this.addMessage(`❌ Error: ${error.message}`, 'error');
+        } finally {
+            this.isLoading = false;
+            this.hideLoading();
+            this.input.focus();
         }
     }
 
     async handleCommand(message) {
-        const parts = message.split(' ');
-        const command = parts[0];
+        return new Promise(async (resolve) => {
+            const parts = message.substring(1).split(' ');
+            const command = parts[0].toLowerCase();
+            const args = parts.slice(1);
+
+            try {
+                let success = false;
+                let data = null;
+
+                switch (command) {
+                    case 'login':
+                        if (args.length === 0) {
+                            this.addMessage('❌ Password required.\n\nUsage: /login <password>', 'error');
+                            break;
+                        }
+                        
+                        const password = args.join(' ');
+                        const loginResponse = await fetch('/api/login', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ password })
+                        });
+                        
+                        const loginData = await loginResponse.json();
+                        
+                        if (loginResponse.ok && loginData.login_success) {
+                            this.setAuthenticated(true);
+                            this.addMessage(loginData.response, 'system');
+                            // Save session token for this tab session
+                            if (loginData.session_token) {
+                                this.sessionToken = loginData.session_token;
+                                sessionStorage.setItem('session_token', this.sessionToken);
+                            }
+                            // Remove auth required messages and update welcome
+                            this.updateWelcomeMessage();
+                            success = true;
+                        } else {
+                            this.addMessage(loginData.response || '❌ Authentication failed.', 'error');
+                        }
+                        break;
+
+                    case 'clear':
+                        this.clearConversationHistory();
+                        this.output.innerHTML = '';
+                        this.addSystemMessage('🔄 Chat cleared. How can I help you?');
+                        success = true;
+                        break;
+
+                    case 'help':
+                        const helpResponse = await fetch('/api/help');
+                        const helpData = await helpResponse.json();
+                        this.addMessage(helpData.response, 'system');
+                        success = true;
+                        break;
+
+                    case 'models':
+                        await this.handleModelsCommand();
+                        success = true;
+                        break;
+
+                    case 'set-model':
+                        if (args.length === 0) {
+                            this.addMessage('❌ Model ID required.\n\nUsage: /set-model <model-id> or /set-model auto', 'error');
+                            break;
+                        }
+                        
+                        const modelId = args.join(' ');
+                        await this.setModel(modelId);
+                        success = true;
+                        break;
+
+                    case 'set-api-key':
+                        if (args.length === 0) {
+                            this.addMessage('❌ API key required.\n\nUsage: /set-api-key <your-openrouter-key>\n\nGet your key: https://openrouter.ai/settings/keys', 'error');
+                            break;
+                        }
+                        
+                        const apiKey = args.join(' ');
+                        await this.setUserApiKey(apiKey);
+                        success = true;
+                        break;
+
+                    case 'remove-api-key':
+                        this.removeUserApiKey();
+                        success = true;
+                        break;
+
+                    case 'api-key-status':
+                        this.showApiKeyStatus();
+                        success = true;
+                        break;
+
+                    default:
+                        this.addMessage(`❌ Unknown command: /${command}\n\nType /help for available commands.`, 'error');
+                        break;
+                }
+
+                resolve({ success, data });
+            } catch (error) {
+                console.error('Command error:', error);
+                this.addMessage(`❌ Error executing command: ${error.message}`, 'error');
+                resolve({ success: false, data: null });
+            }
+        });
+    }
+
+    async handleModelsCommand() {
+        if (!this.isAuthenticated && !this.userApiKey) {
+            this.addMessage('❌ Authentication required.\n\nUse /login <password> or /set-api-key <key> first.', 'error');
+            return;
+        }
 
         try {
-            switch (command) {
-                case '/login':
-                    return await this.handleLogin(parts.slice(1).join(' '));
-                case '/clear':
-                    // Clear local conversation history and context
-                    this.clearConversationHistory();
-                    // Clear the output display
-                    this.output.innerHTML = '';
-                    return {
-                        success: true,
-                        data: { response: '🗑️ Context and conversation history cleared!' }
-                    };
-                case '/set-api-key':
-                    return this.handleSetApiKey(parts.slice(1).join(' '));
-                case '/remove-api-key':
-                    return this.handleRemoveApiKey();
-                case '/api-key-status':
-                    return this.handleApiKeyStatus();
-                case '/help':
-                    return this.handleHelp();
-                default:
-                    return {
-                        success: false,
-                        data: { error: `Unknown command: ${command}` }
-                    };
+            const headers = { 'Content-Type': 'application/json' };
+            if (this.userApiKey) {
+                headers['X-User-API-Key'] = this.userApiKey;
+            }
+
+            const response = await fetch('/api/models', {
+                method: 'GET',
+                headers: headers
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.models && Array.isArray(data.models)) {
+                    let modelList = `📋 Available Models (${data.models.length} total)\n\n`;
+                    data.models.forEach((model, index) => {
+                        const modelId = typeof model === 'string' ? model : model.id;
+                        modelList += `${index + 1}. ${modelId}\n`;
+                    });
+                    modelList += `\nUsage: /set-model <model-id> or /set-model auto`;
+                    this.addMessage(modelList, 'system');
+                } else {
+                    this.addMessage('❌ No models available.', 'error');
+                }
+            } else {
+                this.addMessage('❌ Failed to fetch models.', 'error');
             }
         } catch (error) {
-            return {
-                success: false,
-                data: { error: error.message }
-            };
+            console.error('Models fetch error:', error);
+            this.addMessage(`❌ Error fetching models: ${error.message}`, 'error');
         }
     }
 
-    async handleLogin(password) {
-        const response = await fetch('/api/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ password: password })
-        });
-
-        const data = await response.json();
-        return { success: response.ok, data: data };
+    async setModel(modelId) {
+        this.selectedModel = modelId;
+        localStorage.setItem('selectedModel', modelId);
+        
+        // Update model info and context size
+        this.updateModelInfo(modelId);
+        
+        // Update title
+        this.updateModelTitle();
+        
+        this.addMessage(`✅ Model set to: ${modelId}`, 'system');
     }
 
-    addUserMessage(content) {
-        const timestamp = new Date().toLocaleTimeString();
-        const messageDiv = document.createElement('div');
-        messageDiv.className = 'message user-message';
-        messageDiv.innerHTML = `
-            <div class="message-header">[USER] ${timestamp}</div>
-            <div class="message-content">${this.escapeHtml(content)}</div>
-        `;
-        this.output.appendChild(messageDiv);
-        this.scrollToBottom();
-    }
+    async setUserApiKey(apiKey) {
+        try {
+            // Simple validation
+            if (!apiKey.startsWith('sk-') || apiKey.length < 20) {
+                this.addMessage('❌ Invalid API key format. Should start with "sk-" and be at least 20 characters.', 'error');
+                return;
+            }
 
-    shortenModelName(modelName) {
-        if (!modelName || modelName === 'system') return '';
-
-        const parts = modelName.split('/');
-        if (parts.length < 2) return modelName;
-
-        const modelPart = parts[1];
-        const modelParts = modelPart.split('-');
-        const shortName = modelParts.slice(0, 3).join('-');
-
-        return shortName.replace(':free', '');
-    }
-
-    addAssistantMessage(content, model) {
-        const timestamp = new Date().toLocaleTimeString();
-        const shortModelName = this.shortenModelName(model);
-        const modelInfo = shortModelName ? ` - ${shortModelName}` : '';
-        const AIBadge = '<span class="ai-badge">AI</span>';
-
-        const messageDiv = document.createElement('div');
-        messageDiv.className = 'message assistant-message';
-
-        const formattedContent = this.markdownParser.renderContent(content);
-
-        messageDiv.innerHTML = `
-            <div class="message-header">[AI${modelInfo}] ${timestamp} ${AIBadge}</div>
-            <div class="message-content">${formattedContent}</div>
-        `;
-        this.output.appendChild(messageDiv);
-
-        // Apply additional syntax highlighting if highlight.js is available
-        if (typeof hljs !== 'undefined') {
-            const codeBlocks = messageDiv.querySelectorAll('pre code');
-            codeBlocks.forEach(block => {
-                if (!block.classList.contains('hljs')) {
-                    try {
-                        hljs.highlightElement(block);
-                    } catch (err) {
-                        // Silent fallback
-                    }
-                }
-            });
+            // Store encrypted API key
+            const encryptedKey = this.simpleEncrypt(apiKey, this.encryptionKey);
+            localStorage.setItem('user_api_key', encryptedKey);
+            this.userApiKey = apiKey;
+            
+            // Update auth status
+            this.setAuthenticated(false); // Reset server auth
+            this.updateAuthStatus();
+            
+            // Clear models cache to force refresh with new key
+            this.availableModels = [];
+            localStorage.removeItem('cached-models');
+            
+            this.addMessage('✅ Personal API key set successfully!\n\n🔑 You\'re now using your own OpenRouter account.\n\nFeatures:\n• Access to all models in your account\n• Uses your quota and billing\n• Commands: /models, /set-model <id>\n\n💡 Your key is stored locally and encrypted.', 'system');
+            
+            // Load models with new key
+            await this.loadModelsBackground();
+            
+        } catch (error) {
+            console.error('API key setup error:', error);
+            this.addMessage(`❌ Error setting API key: ${error.message}`, 'error');
         }
-
-        this.scrollToBottom();
     }
 
-    addSystemMessage(content, extraClass = '') {
-        const timestamp = new Date().toLocaleTimeString();
-        const messageDiv = document.createElement('div');
-        messageDiv.className = `message system-message ${extraClass}`;
-        messageDiv.innerHTML = `
-            <div class="message-header">[SYSTEM] ${timestamp}</div>
-            <div class="message-content">${this.escapeHtml(content)}</div>
-        `;
-        this.output.appendChild(messageDiv);
-        this.scrollToBottom();
+    removeUserApiKey() {
+        localStorage.removeItem('user_api_key');
+        this.userApiKey = null;
+        this.setAuthenticated(false);
+        this.updateAuthStatus();
+        
+        // Clear models cache
+        this.availableModels = [];
+        localStorage.removeItem('cached-models');
+        
+        this.addMessage('✅ Personal API key removed.\n\n📡 You can now:\n• Login with server password: /login <password>\n• Or set a new personal key: /set-api-key <key>', 'system');
     }
 
-    addErrorMessage(content) {
-        const timestamp = new Date().toLocaleTimeString();
-        const messageDiv = document.createElement('div');
-        messageDiv.className = 'message error-message';
-        messageDiv.innerHTML = `
-            <div class="message-header">[ERROR] ${timestamp}</div>
-            <div class="message-content">${this.escapeHtml(content)}</div>
-        `;
-        this.output.appendChild(messageDiv);
-        this.scrollToBottom();
-    }
-
-    updateSendButton() {
-        const hasText = this.messageInput.value.trim().length > 0;
-        const canSend = hasText && !this.isLoading;
-
-        this.sendButton.disabled = !canSend;
-
-        if (canSend) {
-            this.sendButton.style.opacity = '1';
-            this.sendButton.style.transform = 'scale(1)';
+    showApiKeyStatus() {
+        if (this.userApiKey) {
+            const maskedKey = this.userApiKey.substring(0, 8) + '...' + this.userApiKey.substring(this.userApiKey.length - 4);
+            this.addMessage(`🔑 Personal API Key Status: Active\n\nKey: ${maskedKey}\nSource: Local storage (encrypted)\n\nCommands:\n• /remove-api-key - Remove current key\n• /models - View available models`, 'system');
+        } else if (this.isAuthenticated) {
+            this.addMessage(`📡 Server Authentication: Active\n\nUsing server's API key for free access.\n\nCommands:\n• /set-api-key <key> - Switch to personal key\n• /models - View available models`, 'system');
         } else {
-            this.sendButton.style.opacity = '0.5';
-            this.sendButton.style.transform = 'scale(0.9)';
+            this.addMessage(`❌ No authentication active.\n\nChoose one option:\n• /login <password> - Use server key\n• /set-api-key <key> - Use personal key\n\nGet API key: https://openrouter.ai/settings/keys`, 'system');
+        }
+    }
+
+    simpleEncrypt(text, key) {
+        // Simple XOR encryption for local storage
+        let result = '';
+        for (let i = 0; i < text.length; i++) {
+            result += String.fromCharCode(text.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+        }
+        return btoa(result);
+    }
+
+    simpleDecrypt(encrypted, key) {
+        try {
+            const decoded = atob(encrypted);
+            let result = '';
+            for (let i = 0; i < decoded.length; i++) {
+                result += String.fromCharCode(decoded.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+            }
+            return result;
+        } catch {
+            return null;
         }
     }
 
     showLoading() {
-        this.showTypingAnimation();
-        this.updateSendButton();
-        this.scrollToBottom();
-        // 센드버튼 아이콘을 asterisk로 교체하고 애니메이션 클래스 추가
-        const sendArrow = this.sendButton.querySelector('.send-arrow');
-        if (sendArrow) {
-            sendArrow.textContent = '✱';
-            sendArrow.classList.add('asterisk-anim');
+        this.isLoading = true;
+        if (this.inputSpinner) {
+            this.inputSpinner.style.display = 'flex';
+        }
+        if (this.sendButton) {
+            this.sendButton.textContent = '⏳';
+            this.sendButton.disabled = true;
         }
     }
 
     hideLoading() {
-        this.hideTypingAnimation();
-        this.updateSendButton();
-        // 센드버튼 아이콘을 ↑로 복구하고 애니메이션 클래스 제거
-        const sendArrow = this.sendButton.querySelector('.send-arrow');
-        if (sendArrow) {
-            sendArrow.textContent = '↑';
-            sendArrow.classList.remove('asterisk-anim');
+        this.isLoading = false;
+        if (this.inputSpinner) {
+            this.inputSpinner.style.display = 'none';
+        }
+        if (this.sendButton) {
+            this.sendButton.textContent = '↑';
+            this.sendButton.disabled = false;
         }
     }
 
-    showTypingAnimation() {
-        this.hideTypingAnimation();
-
-        // 채팅창만 숨쉬는 효과 추가
-        this.output.classList.add('breathing');
+    addMessage(content, role, model = null) {
+        const timestamp = new Date().toLocaleTimeString();
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${role}-message`;
+        
+        let header = '';
+        if (role === 'user') {
+            header = `[USER] ${timestamp}`;
+        } else if (role === 'assistant') {
+            header = `[ASSISTANT] ${timestamp}`;
+            if (model) {
+                header += ` - ${this.shortenModelName(model)}`;
+            }
+        } else if (role === 'system') {
+            header = `[SYSTEM] ${timestamp}`;
+        } else if (role === 'error') {
+            header = `[ERROR] ${timestamp}`;
+        }
+        
+        messageDiv.innerHTML = `
+            <div class="message-header">${header}</div>
+            <div class="message-content">${role === 'assistant' ? this.markdownParser.renderContent(content) : this.escapeHtml(content)}</div>
+        `;
+        
+        this.output.appendChild(messageDiv);
         this.scrollToBottom();
+        
+        // Syntax highlighting for code blocks if it's an assistant message
+        if (role === 'assistant' && typeof hljs !== 'undefined') {
+            messageDiv.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightElement(block);
+            });
+        }
     }
 
-    hideTypingAnimation() {
-        // 숨쉬는 효과 제거
-        this.output.classList.remove('breathing');
+    addSystemMessage(content, className = '') {
+        this.addMessage(content, 'system');
+        if (className) {
+            const lastMessage = this.output.lastElementChild;
+            if (lastMessage) {
+                lastMessage.classList.add(className);
+            }
+        }
     }
 
     escapeHtml(text) {
@@ -822,66 +929,34 @@ class TerminalChat {
     }
 
     scrollToBottom() {
-        // Enhanced scroll for iOS 18
-        if (this.isIOS18Plus) {
-            // Use multiple scroll attempts for iOS 18 reliability
-            const scrollAttempt = () => {
-                this.output.scrollTop = this.output.scrollHeight;
-            };
+        setTimeout(() => {
+            this.output.scrollTop = this.output.scrollHeight;
+        }, 10);
+    }
 
-            requestAnimationFrame(scrollAttempt);
-            setTimeout(scrollAttempt, 16);
-            setTimeout(scrollAttempt, 100);
-        } else {
-            requestAnimationFrame(() => {
-                this.output.scrollTop = this.output.scrollHeight;
-
-                setTimeout(() => {
-                    this.output.scrollTop = this.output.scrollHeight;
-                    this.output.scrollIntoView({ behavior: 'smooth', block: 'end' });
-                }, 50);
-            });
+    shortenModelName(modelName) {
+        if (!modelName) return '';
+        
+        // Remove common prefixes and make more readable
+        let shortened = modelName
+            .replace(/^(meta-llama\/|google\/|anthropic\/|openai\/|mistralai\/|microsoft\/|huggingfaceh4\/|nousresearch\/|teknium\/|gryphe\/|undi95\/|koboldai\/|pygmalionai\/|alpindale\/|jondurbin\/|neversleep\/|cognitivecomputations\/|lizpreciatior\/|migtissera\/|austism\/|xwin-lm\/|01-ai\/|togethercomputer\/|nvidia\/|intel\/|sambanova\/)/i, '')
+            .replace(/:free$/, '')
+            .replace(/-instruct$/, '')
+            .replace(/-chat$/, '')
+            .replace(/-v\d+(\.\d+)*$/, '')
+            .replace(/(\d+)b$/, '$1B')
+            .replace(/(\d+)x(\d+)b$/, '$1×$2B');
+        
+        // Truncate if still too long
+        if (shortened.length > 20) {
+            shortened = shortened.substring(0, 17) + '...';
         }
-    }
-
-    stringToColor(str) {
-        return this.markdownParser.stringToColor(str);
-    }
-
-    autoResizeTextarea() {
-        this.messageInput.style.height = 'auto';
-        this.messageInput.style.height = Math.min(this.messageInput.scrollHeight, 200) + 'px';
-    }
-
-    handleSendButtonPress() {
-        const messageText = this.messageInput.value.trim();
-
-        if (messageText && !this.isLoading) {
-            this.sendMessage();
-        }
-    }
-
-    updateModelTitle() {
-        const modelTitle = document.getElementById('modelTitle');
-        if (modelTitle) {
-            let modelName = this.selectedModel;
-            if (!modelName || modelName === 'auto') {
-                modelName = this.availableModels && this.availableModels.length > 0 ? this.availableModels[0] : 'whoami';
-            }
-            
-            let displayName = this.shortenModelName(modelName) || modelName;
-            
-            // 사용자 API 키 사용시 표시 추가
-            if (this.userApiKey) {
-                displayName += ' 👑';
-            }
-            
-            modelTitle.textContent = displayName;
-        }
+        
+        return shortened;
     }
 
     showModelModal() {
-        if (!this.authenticated && !this.userApiKey) {
+        if (!this.isAuthenticated && !this.userApiKey) {
             this.addSystemMessage('Please login with /login <password> or set your API key with /set-api-key <key> first to change models.');
             return;
         }
@@ -915,105 +990,40 @@ class TerminalChat {
         const displayModels = this.userApiKey ? this.availableModels : this.availableModels;
 
         displayModels.forEach((model, index) => {
+            const modelId = typeof model === 'string' ? model : model.id;
             const modelItem = document.createElement('div');
-            modelItem.className = 'model-item';
+            modelItem.className = 'model-list-item';
             
-            if (model === this.selectedModel) {
+            // Check if this is the currently selected model
+            if (modelId === this.selectedModel) {
                 modelItem.classList.add('selected');
             }
-
-            // Parse model name for better display
-            const modelMatch = model.match(/^(.+?)\/(.+)$/);
-            if (modelMatch) {
-                const provider = modelMatch[1];
-                const modelName = modelMatch[2].replace(':free', '');
-                const providerColor = this.stringToColor(provider);
-                
-                // Add star for meta and google models, crown for user API key models
-                let indicator = '';
-                if (this.userApiKey) {
-                    indicator = ' 👑'; // Crown for user API key
-                } else if (provider === 'meta-llama' || provider === 'google') {
-                    indicator = ' ✱'; // Star for meta and google models
-                }
-                
-                modelItem.innerHTML = `
-                    <div style="color: ${providerColor}; font-weight: 500;">${provider}/${modelName}${indicator}</div>
-                    <div class="model-provider">${provider}${this.userApiKey ? ' (Your API Key)' : ''}</div>
-                `;
-            } else {
-                modelItem.innerHTML = `
-                    <div style="font-weight: 500;">${model}${this.userApiKey ? ' 👑' : ''}</div>
-                    <div class="model-provider">${this.userApiKey ? 'Your API Key' : 'Server'}</div>
-                `;
-            }
-
+            
+            modelItem.innerHTML = `
+                <div class="model-name">${this.shortenModelName(modelId)}</div>
+                <div class="model-id">${modelId}</div>
+            `;
+            
             modelItem.addEventListener('click', () => {
-                this.selectModelFromModal(model, index);
+                this.setModel(modelId);
+                this.hideModelModal();
             });
-
+            
             this.modelList.appendChild(modelItem);
         });
-
-        // Add info message for user API key
-        if (this.userApiKey) {
-            const infoDiv = document.createElement('div');
-            infoDiv.className = 'model-list-info';
-            infoDiv.innerHTML = `
-                <div style="padding: 12px 20px; color: #00ff00; font-size: 12px; border-top: 1px solid rgba(255, 255, 255, 0.1);">
-                    🔑 Using your personal API key - All models available
-                </div>
-            `;
-            this.modelList.appendChild(infoDiv);
-        }
     }
 
-    async selectModelFromModal(model, index) {
-        try {
-            await this.setModel(model);
-            this.currentModelIndex = index;
-            this.hideModelModal();
-        } catch (error) {
-            console.error('Failed to select model:', error);
-        }
-    }
-
-    async setModel(modelName) {
-        try {
-            // Prepare headers with user API key if available
-            const headers = { 'Content-Type': 'application/json' };
-            if (this.userApiKey) {
-                headers['X-User-API-Key'] = this.userApiKey;
-            }
-
-            const response = await fetch('/api/set-model', {
-                method: 'POST',
-                headers: headers,
-                body: JSON.stringify({ model: modelName })
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                if (data.success) {
-                    this.selectedModel = modelName;
-                    localStorage.setItem('selected-model', modelName);
-                    
-                    // Find model info and update context size
-                    this.updateModelInfo(modelName);
-                    
-                    this.updateModelTitle();
-                    this.addSystemMessage(`Model switched to: ${this.shortenModelName(modelName)}`);
-                    console.log('Model set to:', modelName);
-                } else {
-                    this.addErrorMessage('Failed to set model: ' + (data.error || 'Unknown error'));
-                }
-            } else {
-                this.addErrorMessage('Failed to set model: HTTP ' + response.status);
-            }
-        } catch (error) {
-            console.error('Failed to set model:', error);
-            this.addErrorMessage('Failed to set model: ' + error.message);
-        }
+    async setModel(modelId) {
+        this.selectedModel = modelId;
+        localStorage.setItem('selectedModel', modelId);
+        
+        // Update model info and context size
+        this.updateModelInfo(modelId);
+        
+        // Update title
+        this.updateModelTitle();
+        
+        this.addMessage(`✅ Model set to: ${modelId}`, 'system');
     }
 
     // Update model information and context size
@@ -1078,39 +1088,44 @@ class TerminalChat {
 
     // Calculate actual token usage from conversation history
     calculateCurrentTokenUsage() {
-        // Calculate tokens for all messages that will be sent to API
+        // Calculate estimated tokens for all messages that will be sent to API
         let totalTokens = 0;
         
         this.conversationHistory.forEach(msg => {
             totalTokens += this.estimateTokens(msg.content);
         });
         
-        this.currentTokenUsage = totalTokens;
+        this.estimatedTokenUsage = totalTokens;
+        
+        // Use actual token usage if available, otherwise fall back to estimated
+        const actualUsage = this.currentTokenUsage || this.estimatedTokenUsage;
         
         // Auto-trim conversation if it exceeds 80% of model context
         const contextLimit = this.maxContextSize * 0.8; // Use 80% of available context
-        if (totalTokens > contextLimit && this.conversationHistory.length > 2) {
-            console.log(`🔄 Auto-trimming conversation: ${totalTokens} > ${contextLimit} tokens`);
+        if (actualUsage > contextLimit && this.conversationHistory.length > 2) {
+            console.log(`🔄 Auto-trimming conversation: ${actualUsage} > ${contextLimit} tokens`);
             
             // Remove oldest messages until we're under the limit
-            while (this.currentTokenUsage > contextLimit && this.conversationHistory.length > 2) {
+            while (this.estimatedTokenUsage > contextLimit && this.conversationHistory.length > 2) {
                 const removed = this.conversationHistory.shift();
-                this.currentTokenUsage -= this.estimateTokens(removed.content);
+                this.estimatedTokenUsage -= this.estimateTokens(removed.content);
             }
             
-            console.log(`✂️ Trimmed to ${this.conversationHistory.length} messages, ${this.currentTokenUsage} tokens`);
+            console.log(`✂️ Trimmed to ${this.conversationHistory.length} messages, ~${this.estimatedTokenUsage} tokens`);
         }
         
         this.updateContextDisplay();
-        return totalTokens;
+        return actualUsage;
     }
 
     // Update context display with real usage
     updateContextDisplay() {
         if (!this.contextUsage) return;
 
-        const remainingTokens = this.maxContextSize - this.currentTokenUsage;
-        const usagePercentage = Math.round((this.currentTokenUsage / this.maxContextSize) * 100);
+        // Use actual token usage if available, otherwise estimated
+        const displayUsage = this.currentTokenUsage || this.estimatedTokenUsage;
+        const remainingTokens = this.maxContextSize - displayUsage;
+        const usagePercentage = Math.round((displayUsage / this.maxContextSize) * 100);
         
         // Format context size display
         let contextSizeDisplay;
@@ -1122,16 +1137,9 @@ class TerminalChat {
             contextSizeDisplay = this.maxContextSize.toString();
         }
         
-        // Format remaining tokens display
-        let remainingDisplay;
-        if (remainingTokens >= 1000) {
-            remainingDisplay = `${Math.round(remainingTokens / 1000)}k`;
-        } else {
-            remainingDisplay = remainingTokens.toString();
-        }
-        
-        // Show: "Context: 128k (0%)" or "Context: 1M (5%)"
-        const displayText = `Context: ${contextSizeDisplay} (${usagePercentage}%)`;
+        // Show: "Context: 128k (5%)" with indicator for actual vs estimated
+        const usageIndicator = this.currentTokenUsage > 0 ? '' : '~'; // ~ for estimated
+        const displayText = `Context: ${contextSizeDisplay} (${usageIndicator}${usagePercentage}%)`;
 
         this.contextUsage.textContent = displayText;
 
@@ -1145,13 +1153,24 @@ class TerminalChat {
     }
 
     // Add message to conversation history
-    addToConversationHistory(role, content) {
+    addToConversationHistory(role, content, actualTokens = null) {
+        const estimatedTokens = this.estimateTokens(content);
+        
         this.conversationHistory.push({
             role: role,
             content: content,
             timestamp: Date.now(),
-            estimatedTokens: this.estimateTokens(content)
+            estimatedTokens: estimatedTokens,
+            actualTokens: actualTokens
         });
+
+        // Update token usage
+        if (actualTokens) {
+            // Recalculate actual usage based on all messages with actual tokens
+            this.currentTokenUsage = this.conversationHistory.reduce((sum, msg) => {
+                return sum + (msg.actualTokens || msg.estimatedTokens || this.estimateTokens(msg.content));
+            }, 0);
+        }
 
         // Calculate and update current usage
         this.calculateCurrentTokenUsage();
@@ -1161,32 +1180,12 @@ class TerminalChat {
     clearConversationHistory() {
         this.conversationHistory = [];
         this.currentTokenUsage = 0;
+        this.estimatedTokenUsage = 0;
         this.updateContextDisplay();
         this.addSystemMessage('🔄 Conversation history cleared.', 'history-cleared');
     }
 
     // User API Key Management Methods
-    simpleEncrypt(text, key) {
-        let result = '';
-        for (let i = 0; i < text.length; i++) {
-            result += String.fromCharCode(text.charCodeAt(i) ^ key.charCodeAt(i % key.length));
-        }
-        return btoa(result);
-    }
-
-    simpleDecrypt(encryptedText, key) {
-        try {
-            const decoded = atob(encryptedText);
-            let result = '';
-            for (let i = 0; i < decoded.length; i++) {
-                result += String.fromCharCode(decoded.charCodeAt(i) ^ key.charCodeAt(i % key.length));
-            }
-            return result;
-        } catch (e) {
-            return null;
-        }
-    }
-
     getStoredUserApiKey() {
         try {
             const encrypted = localStorage.getItem('user-api-key');
@@ -1226,63 +1225,6 @@ class TerminalChat {
         }
     }
 
-    handleSetApiKey(apiKey) {
-        if (!apiKey || apiKey.trim() === '') {
-            return {
-                success: false,
-                data: { error: 'API key is required.\n\nUsage: /set-api-key <your-openrouter-api-key>\n\nGet your API key from: https://openrouter.ai/settings/keys' }
-            };
-        }
-
-        // Basic validation
-        if (!apiKey.startsWith('sk-or-v1-')) {
-            return {
-                success: false,
-                data: { error: 'Invalid API key format. OpenRouter API keys start with "sk-or-v1-"' }
-            };
-        }
-
-        // Store the API key
-        this.userApiKey = apiKey.trim();
-        this.setStoredUserApiKey(this.userApiKey);
-
-        // Clear models cache to force refresh with new key
-        this.availableModels = [];
-        localStorage.removeItem('cached-models');
-
-        // Update UI state to reflect API key access
-        this.updateAuthStatus();
-        this.updateWelcomeMessage();
-
-        return {
-            success: true,
-            data: { 
-                response: '🔑 Personal API key set successfully!\n\n✅ Your key is stored locally and encrypted\n✅ You can now use AI models with your own quota\n✅ Models list will be refreshed\n\n💡 Your API key never leaves your browser unencrypted.\n\n🎉 You\'re ready to chat!' 
-            }
-        };
-    }
-
-    handleRemoveApiKey() {
-        this.userApiKey = null;
-        this.setStoredUserApiKey(null);
-
-        // Clear models cache since we're switching back to server key
-        this.availableModels = [];
-        localStorage.removeItem('cached-models');
-
-        // Reset authentication state
-        this.authenticated = false;
-        this.updateAuthStatus();
-        this.updateWelcomeMessage();
-
-        return {
-            success: true,
-            data: { 
-                response: '🗑️ Personal API key removed.\n\n✅ API key cleared from local storage\n🔄 Please choose an access method:\n\n📡 Use /login <password> for server access\n🔑 Use /set-api-key <key> for personal access' 
-            }
-        };
-    }
-
     // New method to update auth status
     updateAuthStatus() {
         if (this.userApiKey) {
@@ -1293,7 +1235,7 @@ class TerminalChat {
                 this.authStatus.textContent = '🔑 Personal API Key';
                 this.authStatus.style.color = '#00ff00';
             }
-        } else if (this.authenticated) {
+        } else if (this.isAuthenticated) {
             if (this.statusIndicator) {
                 this.statusIndicator.classList.add('authenticated');
             }
@@ -1312,32 +1254,54 @@ class TerminalChat {
         }
     }
 
-    handleApiKeyStatus() {
-        if (this.userApiKey) {
-            const maskedKey = this.userApiKey.slice(0, 12) + '....' + this.userApiKey.slice(-4);
-            return {
-                success: true,
-                data: { 
-                    response: `🔑 API Key Status:\n\n✅ Using personal API key\n🔐 Key: ${maskedKey}\n📦 Stored: Locally encrypted\n\n💡 Use /remove-api-key to switch back to server key` 
-                }
-            };
-        } else {
-            return {
-                success: true,
-                data: { 
-                    response: '🔑 API Key Status:\n\n📡 Using server API key\n💡 Set your personal key with: /set-api-key <your-key>\n\n🌐 Get your API key: https://openrouter.ai/settings/keys' 
-                }
-            };
+    updateModelTitle() {
+        if (this.modelTitle) {
+            let modelName = this.selectedModel;
+            if (!modelName || modelName === 'auto') {
+                modelName = this.availableModels && this.availableModels.length > 0 ? this.availableModels[0] : 'whoami';
+            }
+            
+            let displayName = this.shortenModelName(modelName) || modelName;
+            
+            // 사용자 API 키 사용시 표시 추가
+            if (this.userApiKey) {
+                displayName += ' 👑';
+            }
+            
+            this.modelTitle.textContent = displayName;
         }
     }
 
-    handleHelp() {
-        return {
-            success: true,
-            data: { 
-                response: `📖 Chatty Commands:\n\n🔐 Authentication:\n/login <password>          - Authenticate with server\n\n🔑 API Key Management:\n/set-api-key <key>         - Set your personal OpenRouter API key\n/remove-api-key            - Remove personal API key (use server key)\n/api-key-status            - Check current API key status\n\n🤖 Model Commands:\n/models                    - List available AI models\n/set-model <id>            - Set specific model\n/set-model auto            - Use auto-selection\n\n💬 Chat Commands:\n/clear                     - Clear conversation history\n/help                      - Show this help\n\n💡 Features:\n• Personal API key support (stored locally & encrypted)\n• Conversation context maintained across messages\n• Optimized parameters for better responses\n• Smart token management\n\n🌐 Get your API key: https://openrouter.ai/settings/keys` 
+    autoResizeTextarea() {
+        if (this.input) {
+            this.input.style.height = 'auto';
+            this.input.style.height = Math.min(this.input.scrollHeight, 200) + 'px';
+        }
+    }
+
+    updateSendButton() {
+        const hasText = this.input && this.input.value.trim().length > 0;
+        const canSend = hasText && !this.isLoading;
+
+        if (this.sendButton) {
+            this.sendButton.disabled = !canSend;
+
+            if (canSend) {
+                this.sendButton.style.opacity = '1';
+                this.sendButton.style.transform = 'scale(1)';
+            } else {
+                this.sendButton.style.opacity = '0.5';
+                this.sendButton.style.transform = 'scale(0.9)';
             }
-        };
+        }
+    }
+
+    handleSendButtonPress() {
+        const messageText = this.input ? this.input.value.trim() : '';
+
+        if (messageText && !this.isLoading) {
+            this.sendMessage();
+        }
     }
 
     async updateAuthenticationInfo() {
@@ -1347,34 +1311,42 @@ class TerminalChat {
             if (this.userApiKey) {
                 headers['X-User-API-Key'] = this.userApiKey;
             }
+            if (this.sessionToken) {
+                headers['X-Session-Token'] = this.sessionToken;
+            }
 
-            const response = await fetch('/api/auth/verify', {
+            const response = await fetch('/api/auth-status', {
                 method: 'GET',
                 headers: headers
             });
 
             if (response.ok) {
                 const data = await response.json();
-                this.authenticated = data.authenticated;
+                this.isAuthenticated = data.authenticated;
                 this.authMethod = data.auth_method;
                 this.authType = data.auth_type;
                 
-                // Update UI based on authentication info
-                this.updateAuthStatus();
+                console.log('Auth status updated:', {
+                    authenticated: this.isAuthenticated,
+                    method: this.authMethod,
+                    type: this.authType,
+                    hasUserKey: !!this.userApiKey
+                });
             } else {
                 // Server error or not authenticated
-                this.authenticated = false;
+                this.isAuthenticated = false;
                 this.authMethod = null;
                 this.authType = null;
-                this.updateAuthStatus();
             }
         } catch (error) {
             // On network error, assume not authenticated
-            this.authenticated = false;
+            this.isAuthenticated = false;
             this.authMethod = null;
             this.authType = null;
-            this.updateAuthStatus();
+            console.log('Auth status check failed:', error.message);
         }
+        
+        this.updateAuthStatus();
     }
 
     // Estimate tokens more accurately
@@ -1397,130 +1369,151 @@ class TerminalChat {
             content: userMessage
         });
 
-        // Calculate total tokens for this API call
-        const totalTokensForCall = messages.reduce((sum, msg) => 
-            sum + this.estimateTokens(msg.content), 0);
-        
-        // Update current usage with the new message
-        this.currentTokenUsage = totalTokensForCall;
-        this.updateContextDisplay();
-
         return messages;
     }
 
-    // Compress JSON data for efficient transmission
-    compressData(data) {
-        if (!this.enableCompression) return data;
-        
-        const jsonString = JSON.stringify(data);
-        if (jsonString.length < this.compressionMinSize) {
-            return data; // Don't compress small payloads
-        }
-
-        // Try LZ-String compression first if library is available
-        if (this.preferZstdCompression && this.lzStringAvailable && LZString) {
-            try {
-                // LZ-String compression optimized for UTF16 strings
-                const compressed = LZString.compressToBase64(jsonString);
-                
-                // 압축률이 좋을 때만 사용 (30% 이상 압축되었을 때)
-                const compressionRatio = 1 - (compressed.length / jsonString.length);
-                if (compressionRatio >= 0.3) {
-                    console.log(`LZ-String compression: ${jsonString.length} → ${compressed.length} bytes (${Math.round(compressionRatio * 100)}% reduction)`);
-                    
-                    return {
-                        compressed: compressed,
-                        original_size: jsonString.length,
-                        compression_method: 'lz-string'
-                    };
-                } else {
-                    console.log('LZ-String compression ratio too low, using fallback');
-                }
-            } catch (error) {
-                console.warn('LZ-String compression failed, using fallback:', error);
-            }
-        }
-
-        // Fallback to simple field compression
-        return this.fallbackCompress(data);
-    }
-
-    // Decompress data (if needed for responses)
-    decompressData(data) {
-        // 압축된 데이터가 아니면 그대로 반환
-        if (!data.compressed) {
-            return data.h ? this.fallbackDecompress(data) : data;
-        }
-        
-        if (data.compression_method === 'lz-string') {
-            // LZ-String 압축 해제
-            if (!this.lzStringAvailable || !LZString) {
-                console.warn('LZ-String library not available for decompression');
-                return data;
-            }
-            
-            try {
-                const jsonString = LZString.decompressFromBase64(data.compressed);
-                if (!jsonString) {
-                    throw new Error('Decompression returned null');
-                }
-                
-                console.log(`LZ-String decompression: ${data.compressed.length} → ${jsonString.length} bytes`);
-                
-                return JSON.parse(jsonString);
-            } catch (error) {
-                console.warn('LZ-String decompression failed:', error);
-                return data;
-            }
-        } else if (data.compression_method === 'gzip' || data.compression_method === 'zstd') {
-            // 기존 압축 방식 지원 (하위 호환성)
-            console.log(`Legacy ${data.compression_method} compression detected, using fallback`);
-            return this.fallbackDecompress(data);
-        }
-        
-        return data;
-    }
-
-    // Fallback compression (기존 방식)
-    fallbackCompress(data) {
-        const jsonString = JSON.stringify(data);
-        if (jsonString.length < this.compressionMinSize) {
-            return data;
-        }
-
-        try {
-            // Simple compression: remove extra spaces and shorten field names
-            const compressed = {
-                m: data.message || data.m, // message
-                h: data.conversationHistory?.map(msg => ({
-                    r: msg.role,
-                    c: msg.content,
-                    t: msg.timestamp
-                })) || data.h, // history
-                c: true // compressed flag
-            };
-            
-            return compressed;
-        } catch (error) {
-            return data;
-        }
-    }
-
-    // Fallback decompression (기존 방식)
-    fallbackDecompress(data) {
-        if (!data.c) return data; // Not compressed
-        
-        try {
+    /**
+     * 압축 유틸리티 메서드들
+     */
+    compressConversationHistory(history, method = this.compressionMethod) {
+        if (!this.enableCompression || !history || history.length === 0) {
             return {
-                message: data.m,
-                conversationHistory: data.h?.map(msg => ({
-                    role: msg.r,
-                    content: msg.c,
-                    timestamp: msg.t
-                }))
+                data: JSON.stringify(history),
+                method: 'none',
+                originalSize: JSON.stringify(history).length,
+                compressedSize: JSON.stringify(history).length,
+                compressionRatio: 0
+            };
+        }
+
+        const originalData = JSON.stringify(history);
+        const originalSize = originalData.length;
+
+        // Skip compression for small data
+        if (originalSize < this.compressionMinSize) {
+            return {
+                data: originalData,
+                method: 'none',
+                originalSize: originalSize,
+                compressedSize: originalSize,
+                compressionRatio: 0
+            };
+        }
+
+        let compressedData;
+        let actualMethod = method;
+
+        // Auto-select compression method based on data size and availability
+        if (method === 'auto') {
+            if (this.lzStringAvailable && history.length > 10) {
+                actualMethod = 'lz-string';
+            } else {
+                actualMethod = 'field-shortening';
+            }
+        }
+
+        try {
+            const startTime = performance.now();
+
+            switch (actualMethod) {
+                case 'lz-string':
+                    compressedData = this.compressWithLZString(history);
+                    break;
+                case 'field-shortening':
+                    compressedData = this.compressWithFieldShortening(history);
+                    break;
+                default:
+                    compressedData = originalData;
+                    actualMethod = 'none';
+            }
+
+            const endTime = performance.now();
+            const compressedSize = compressedData.length;
+            const compressionRatio = ((originalSize - compressedSize) / originalSize) * 100;
+
+            console.log(`📦 Compression: ${actualMethod}, ${originalSize}→${compressedSize} bytes (${compressionRatio.toFixed(1)}% saved, ${(endTime - startTime).toFixed(2)}ms)`);
+
+            return {
+                data: compressedData,
+                method: actualMethod,
+                originalSize: originalSize,
+                compressedSize: compressedSize,
+                compressionRatio: compressionRatio,
+                compressionTime: endTime - startTime
             };
         } catch (error) {
-            return data; // Fallback to original
+            console.warn('Compression failed, using uncompressed data:', error);
+            return {
+                data: originalData,
+                method: 'none',
+                originalSize: originalSize,
+                compressedSize: originalSize,
+                compressionRatio: 0
+            };
+        }
+    }
+
+    compressWithFieldShortening(history) {
+        // 필드명 단축 + 적극적 최적화
+        if (history.length === 0) return JSON.stringify([]);
+
+        const baseTimestamp = Math.min(...history.map(msg => msg.timestamp || Date.now()));
+        const compressed = history.map(msg => ({
+            r: msg.role === 'user' ? 'u' : 'a',
+            c: msg.content,
+            t: (msg.timestamp || Date.now()) - baseTimestamp
+        }));
+
+        return JSON.stringify({
+            b: baseTimestamp,
+            m: compressed
+        });
+    }
+
+    compressWithLZString(history) {
+        // 필드명 단축 + LZ-String 조합
+        const fieldCompressed = this.compressWithFieldShortening(history);
+        return LZString.compress(fieldCompressed);
+    }
+
+    decompressConversationHistory(compressedData, method) {
+        if (!compressedData || method === 'none') {
+            try {
+                return JSON.parse(compressedData);
+            } catch {
+                return [];
+            }
+        }
+
+        try {
+            let decompressed;
+
+            switch (method) {
+                case 'lz-string':
+                    const lzDecompressed = LZString.decompress(compressedData);
+                    decompressed = JSON.parse(lzDecompressed);
+                    break;
+                case 'field-shortening':
+                    decompressed = JSON.parse(compressedData);
+                    break;
+                default:
+                    decompressed = JSON.parse(compressedData);
+            }
+
+            // Handle compressed format
+            if (decompressed.b !== undefined && decompressed.m !== undefined) {
+                const baseTimestamp = decompressed.b;
+                return decompressed.m.map(msg => ({
+                    role: msg.r === 'u' ? 'user' : 'assistant',
+                    content: msg.c,
+                    timestamp: msg.t + baseTimestamp
+                }));
+            }
+
+            return decompressed;
+        } catch (error) {
+            console.error('Decompression failed:', error);
+            return [];
         }
     }
 }
