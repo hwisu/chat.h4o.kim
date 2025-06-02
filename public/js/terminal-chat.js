@@ -17,7 +17,6 @@ class TerminalChat {
         this.modelModal = document.getElementById('modelModal');
         this.modelModalClose = document.getElementById('modelModalClose');
         this.modelTitle = document.getElementById('modelTitle');
-        this.inputSpinner = document.getElementById('inputSpinner');
 
         this.selectedModel = localStorage.getItem('selectedModel') || 'auto';
         this.selectedModelInfo = null;
@@ -663,8 +662,8 @@ class TerminalChat {
                             // Load models with authentication
                             await this.initializeModelsBackground();
 
-                            // Update welcome message
-                            this.updateWelcomeMessage();
+                            // Don't show duplicate welcome message - server response already contains it
+                            // this.updateWelcomeMessage();
 
                             this.addMessage(loginData.response, 'system');
                             success = true;
@@ -879,22 +878,23 @@ class TerminalChat {
 
     showLoading() {
         this.isLoading = true;
-        if (this.inputSpinner) {
-            this.inputSpinner.style.display = 'flex';
-        }
         if (this.sendButton) {
-            this.sendButton.textContent = '⏳';
+            // Create spinner dots inside button
+            this.sendButton.innerHTML = `
+                <div class="button-spinner">
+                    <div class="button-spinner-dot"></div>
+                    <div class="button-spinner-dot"></div>
+                    <div class="button-spinner-dot"></div>
+                </div>
+            `;
             this.sendButton.disabled = true;
         }
     }
 
     hideLoading() {
         this.isLoading = false;
-        if (this.inputSpinner) {
-            this.inputSpinner.style.display = 'none';
-        }
         if (this.sendButton) {
-            this.sendButton.textContent = '↑';
+            this.sendButton.innerHTML = '<span class="send-arrow" style="font-size: 22px; font-weight: bold;">↑</span>';
             this.sendButton.disabled = false;
         }
     }
@@ -969,11 +969,7 @@ class TerminalChat {
             .replace(/(\d+)b$/, '$1B')
             .replace(/(\d+)x(\d+)b$/, '$1×$2B');
 
-        // Truncate if still too long
-        if (shortened.length > 20) {
-            shortened = shortened.substring(0, 17) + '...';
-        }
-
+        // Return full name without truncation - allow wrapping to multiple lines
         return shortened;
     }
 
