@@ -312,10 +312,15 @@ class TerminalChat {
     }
 
     updateWelcomeMessage() {
-        // Remove existing auth messages
+        // Remove existing auth and welcome messages
         const existingAuth = document.querySelector('.auth-required-message');
         if (existingAuth) {
             existingAuth.remove();
+        }
+        
+        const existingWelcome = document.querySelector('.welcome-message');
+        if (existingWelcome) {
+            existingWelcome.remove();
         }
 
         if (!this.isAuthenticated && !this.userApiKey) {
@@ -324,16 +329,15 @@ class TerminalChat {
             return;
         }
 
-        if (!document.querySelector('.welcome-message')) {
-            let accessMethod = '';
-            if (this.userApiKey) {
-                accessMethod = '🔑 Using your personal API key';
-            } else if (this.isAuthenticated) {
-                accessMethod = '📡 Using server API key';
-            }
-            
-            this.addSystemMessage(`✅ Welcome to Chatty!\n\n🧠 Features:\n• Conversation context maintained across messages\n• Type /help to see available commands\n• Start chatting with AI models!\n\n${accessMethod}`, 'welcome-message');
+        // Show welcome message when authenticated
+        let accessMethod = '';
+        if (this.userApiKey) {
+            accessMethod = '🔑 Using your personal API key';
+        } else if (this.isAuthenticated) {
+            accessMethod = '📡 Using server API key';
         }
+        
+        this.addSystemMessage(`✅ Welcome to Chatty!\n\n🧠 Features:\n• Conversation context maintained across messages\n• Type /help to see available commands\n• Start chatting with AI models!\n\n${accessMethod}`, 'welcome-message');
     }
 
     setAuthenticated(authenticated) {
@@ -343,7 +347,7 @@ class TerminalChat {
                 this.statusIndicator.classList.add('authenticated');
             }
             if (this.authStatus) {
-                this.authStatus.textContent = '🔑 Personal API Key';
+                this.authStatus.textContent = '📡 Server Password';
                 this.authStatus.style.color = '#00ff00';
             }
 
@@ -357,7 +361,7 @@ class TerminalChat {
             }
             if (this.authStatus) {
                 if (this.userApiKey) {
-                    this.authStatus.textContent = 'Personal API Key';
+                    this.authStatus.textContent = '🔑 Personal API Key';
                     this.authStatus.style.color = '#00aa00';
                 } else {
                     this.authStatus.textContent = 'Choose access method';
@@ -417,23 +421,43 @@ class TerminalChat {
         this.handleViewportChanges();
 
         // Model modal event listeners
-        if (this.apiKeyModalClose) {
-            this.apiKeyModalClose.addEventListener('click', () => {
+        if (this.modelModalClose) {
+            this.modelModalClose.addEventListener('click', () => {
                 this.hideModelModal();
             });
         }
 
-        if (this.apiKeyModal) {
-            this.apiKeyModal.addEventListener('click', (e) => {
-                if (e.target === this.apiKeyModal) {
+        if (this.modelModal) {
+            // Enhanced backdrop click handling for mobile
+            const handleBackdropClick = (e) => {
+                if (e.target === this.modelModal) {
                     this.hideModelModal();
                 }
-            });
+            };
+            
+            this.modelModal.addEventListener('click', handleBackdropClick);
+            
+            // Add touch support for backdrop
+            if ('ontouchstart' in window) {
+                let touchStartTarget = null;
+                
+                this.modelModal.addEventListener('touchstart', (e) => {
+                    touchStartTarget = e.target;
+                }, { passive: true });
+                
+                this.modelModal.addEventListener('touchend', (e) => {
+                    // Only close if touch started and ended on the backdrop
+                    if (touchStartTarget === this.modelModal && e.target === this.modelModal) {
+                        this.hideModelModal();
+                    }
+                    touchStartTarget = null;
+                }, { passive: true });
+            }
         }
 
         // ESC key to close modal
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && this.apiKeyModal.classList.contains('show')) {
+            if (e.key === 'Escape' && this.modelModal.classList.contains('show')) {
                 this.hideModelModal();
             }
         });
@@ -619,6 +643,11 @@ class TerminalChat {
     }
 
     async handleCommand(message) {
+        // Clear input immediately after command is entered
+        this.input.value = '';
+        this.autoResizeTextarea();
+        this.updateSendButton();
+        
         return new Promise(async (resolve) => {
             const parts = message.substring(1).split(' ');
             const command = parts[0].toLowerCase();
@@ -787,7 +816,7 @@ class TerminalChat {
 
             // Store encrypted API key
             const encryptedKey = this.simpleEncrypt(apiKey, this.encryptionKey);
-            localStorage.setItem('user_api_key', encryptedKey);
+            localStorage.setItem('user-api-key', encryptedKey);
             this.userApiKey = apiKey;
             
             // Update auth status
@@ -797,6 +826,9 @@ class TerminalChat {
             // Clear models cache to force refresh with new key
             this.availableModels = [];
             localStorage.removeItem('cached-models');
+            
+            // Update welcome message to show API key usage
+            this.updateWelcomeMessage();
             
             this.addMessage('✅ Personal API key set successfully!\n\n🔑 You\'re now using your own OpenRouter account.\n\nFeatures:\n• Access to all models in your account\n• Uses your quota and billing\n• Commands: /models, /set-model <id>\n\n💡 Your key is stored locally and encrypted.', 'system');
             
@@ -810,7 +842,7 @@ class TerminalChat {
     }
 
     removeUserApiKey() {
-        localStorage.removeItem('user_api_key');
+        localStorage.removeItem('user-api-key');
         this.userApiKey = null;
         this.setAuthenticated(false);
         this.updateAuthStatus();
@@ -818,6 +850,9 @@ class TerminalChat {
         // Clear models cache
         this.availableModels = [];
         localStorage.removeItem('cached-models');
+        
+        // Update welcome message to show authentication options
+        this.updateWelcomeMessage();
         
         this.addMessage('✅ Personal API key removed.\n\n📡 You can now:\n• Login with server password: /login <password>\n• Or set a new personal key: /set-api-key <key>', 'system');
     }
@@ -992,7 +1027,7 @@ class TerminalChat {
         displayModels.forEach((model, index) => {
             const modelId = typeof model === 'string' ? model : model.id;
             const modelItem = document.createElement('div');
-            modelItem.className = 'model-list-item';
+            modelItem.className = 'model-item';
             
             // Check if this is the currently selected model
             if (modelId === this.selectedModel) {
@@ -1004,26 +1039,33 @@ class TerminalChat {
                 <div class="model-id">${modelId}</div>
             `;
             
-            modelItem.addEventListener('click', () => {
+            // Add both click and touch events for better mobile support
+            const selectModel = () => {
                 this.setModel(modelId);
                 this.hideModelModal();
-            });
+            };
+            
+            modelItem.addEventListener('click', selectModel);
+            
+            // Enhanced touch support for mobile
+            if ('ontouchstart' in window) {
+                let touchStartTime = 0;
+                
+                modelItem.addEventListener('touchstart', (e) => {
+                    touchStartTime = Date.now();
+                }, { passive: true });
+                
+                modelItem.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    const touchDuration = Date.now() - touchStartTime;
+                    if (touchDuration < 500) { // Prevent accidental long presses
+                        selectModel();
+                    }
+                }, { passive: false });
+            }
             
             this.modelList.appendChild(modelItem);
         });
-    }
-
-    async setModel(modelId) {
-        this.selectedModel = modelId;
-        localStorage.setItem('selectedModel', modelId);
-        
-        // Update model info and context size
-        this.updateModelInfo(modelId);
-        
-        // Update title
-        this.updateModelTitle();
-        
-        this.addMessage(`✅ Model set to: ${modelId}`, 'system');
     }
 
     // Update model information and context size
@@ -1241,7 +1283,7 @@ class TerminalChat {
             }
             if (this.authStatus) {
                 this.authStatus.textContent = '📡 Server Password';
-                this.authStatus.style.color = '#00aa00';
+                this.authStatus.style.color = '#00ff00';
             }
         } else {
             if (this.statusIndicator) {

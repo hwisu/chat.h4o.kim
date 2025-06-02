@@ -553,9 +553,21 @@
     transition: all 0.2s ease;
     font-family: inherit;
     font-size: 14px;
+    /* Enhanced touch support */
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: rgba(0, 255, 0, 0.2);
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    /* Ensure minimum touch target size */
+    min-height: 44px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }
 
-.model-item:hover {
+.model-item:hover,
+.model-item:active {
     background: rgba(0, 255, 0, 0.1);
     color: #00ff88;
 }
@@ -568,6 +580,17 @@
 
 .model-item:last-child {
     border-bottom: none;
+}
+
+.model-name {
+    font-weight: 500;
+    font-size: 14px;
+}
+
+.model-id {
+    font-size: 12px;
+    color: #888;
+    margin-top: 2px;
 }
 
 .model-provider {

@@ -108,9 +108,27 @@
         font-size: 16px;
     }
 
+    .model-modal-close {
+        width: 40px;
+        height: 40px;
+        font-size: 28px;
+        /* Better touch target for mobile */
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: rgba(255, 255, 255, 0.2);
+    }
+
     .model-item {
         padding: 16px 20px;
         font-size: 16px;
+        min-height: 60px;
+    }
+
+    .model-name {
+        font-size: 16px;
+    }
+
+    .model-id {
+        font-size: 14px;
     }
 
     .model-provider {
@@ -180,6 +198,28 @@
 
     .model-item {
         padding: 18px 16px;
+        min-height: 66px;
+    }
+
+    .model-name {
+        font-size: 17px;
+    }
+
+    .model-id {
+        font-size: 15px;
+    }
+
+    .model-provider {
+        font-size: 13px;
+    }
+
+    .model-modal-close {
+        width: 44px;
+        height: 44px;
+        font-size: 30px;
+        /* Enhanced touch target for small screens */
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: rgba(255, 255, 255, 0.2);
     }
 }
 
