@@ -207,12 +207,8 @@ class TerminalChat {
     }
 
     async loadModelsBackground() {
-        if (this.availableModels.length === 0 || this.userApiKey) {
-            this.availableModels = this.getStoredModels();
-        }
-
-        // 사용자 API 키를 사용하는 경우 캐시를 우회하고 최신 모델 목록을 가져옴
-        if (this.availableModels.length === 0 || this.userApiKey) {
+        // Try to fetch fresh models from server if authenticated
+        if (this.isAuthenticated || this.userApiKey) {
             try {
                 // Prepare headers with authentication
                 const headers = { 'Content-Type': 'application/json' };
@@ -229,9 +225,10 @@ class TerminalChat {
                 });
 
                 if (response.status === 401) {
-                    // Authentication required - clear any stored auth state
+                    // Authentication failed - clear auth state and use cache
                     this.setAuthenticated(false);
-                    console.log('Models loading failed: Authentication required');
+                    console.log('⚠️ Models loading failed: Authentication expired');
+                    this.availableModels = this.getStoredModels();
                     return;
                 }
 
@@ -245,16 +242,21 @@ class TerminalChat {
 
                         const modelCount = this.availableModels.length;
                         const keyType = this.userApiKey ? 'personal API key' : 'server key';
-                        console.log(`Models loaded in background: ${modelCount} models using ${keyType}`);
+                        console.log(`✅ Fresh models loaded: ${modelCount} models using ${keyType}`);
 
                         this.updateModelTitle();
+                        return;
                     }
-                } else {
-                    // Silent fallback on error
                 }
             } catch (error) {
-                // Silent fallback on error
+                console.warn('Failed to fetch fresh models:', error);
             }
+        }
+
+        // Fallback to cached models if not authenticated or server request failed
+        if (this.availableModels.length === 0) {
+            this.availableModels = this.getStoredModels();
+            console.log(`📦 Using cached models: ${this.availableModels.length} models`);
         }
     }
 
@@ -656,10 +658,15 @@ class TerminalChat {
                                 sessionStorage.setItem('session_token', this.sessionToken);
                             }
 
+                            // Clear old cached data to force fresh loading after login
+                            this.availableModels = [];
+                            localStorage.removeItem('cached-models');
+                            console.log('🧹 Cleared model cache after successful login');
+
                             // Update authentication info from server
                             await this.updateAuthenticationInfo();
 
-                            // Load models with authentication
+                            // Load models with fresh authentication
                             await this.initializeModelsBackground();
 
                             // Don't show duplicate welcome message - server response already contains it
@@ -781,7 +788,7 @@ class TerminalChat {
 
     async setModel(modelId) {
         this.selectedModel = modelId;
-        localStorage.setItem('selectedModel', modelId);
+        localStorage.setItem('selected-model', modelId);
 
         // Update model info and context size
         this.updateModelInfo(modelId);
@@ -1282,7 +1289,13 @@ class TerminalChat {
         if (this.modelTitle) {
             let modelName = this.selectedModel;
             if (!modelName || modelName === 'auto') {
-                modelName = this.availableModels && this.availableModels.length > 0 ? this.availableModels[0] : 'whoami';
+                if (this.availableModels && this.availableModels.length > 0) {
+                    modelName = this.availableModels[0];
+                } else if (this.isAuthenticated || this.userApiKey) {
+                    modelName = 'loading...';  // Show loading when authenticated but no models yet
+                } else {
+                    modelName = 'login required';  // More descriptive when not authenticated
+                }
             }
 
             let displayName = this.shortenModelName(modelName) || modelName;
@@ -1293,6 +1306,7 @@ class TerminalChat {
             }
 
             this.modelTitle.textContent = displayName;
+            console.log(`🏷️ Model title updated: "${displayName}" (selected: ${this.selectedModel}, available: ${this.availableModels.length})`);
         }
     }
 
