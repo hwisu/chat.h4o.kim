@@ -316,7 +316,7 @@
 }
 
 .system-message .message-content {
-    max-width: 80%;
+    max-width: 100%;
     display: inline-block;
     margin-right: auto;
 }
@@ -467,23 +467,169 @@
 
 /* Model selection modal */
 .model-modal {
-    display: none;
     position: fixed;
     top: 0;
     left: 0;
-    right: 0;
-    bottom: 0;
+    width: 100%;
+    height: 100%;
     background: rgba(0, 0, 0, 0.8);
-    z-index: 10000;
     backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
 }
 
 .model-modal.show {
     display: flex;
+    animation: modal-fade-in 0.2s ease-out;
+}
+
+/* Auth and API Key modals */
+.auth-modal,
+.api-key-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(4px);
+    z-index: 1000;
+    display: none;
     align-items: center;
     justify-content: center;
+    padding: 20px;
+}
+
+.auth-modal[style*="block"],
+.api-key-modal[style*="block"] {
+    display: flex !important;
     animation: modal-fade-in 0.2s ease-out;
+}
+
+.modal-content {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 8px;
+    max-width: 400px;
+    width: 100%;
+    max-height: 80vh;
+    overflow-y: auto;
+    animation: modal-scale-in 0.2s ease-out;
+}
+
+.modal-header {
+    padding: 20px 20px 10px;
+    border-bottom: 1px solid #333;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-header h3 {
+    margin: 0;
+    color: #fff;
+    font-size: 18px;
+    font-weight: 500;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.modal-close:hover {
+    background: #333;
+    color: #fff;
+}
+
+.modal-body {
+    padding: 20px;
+}
+
+.modal-body p {
+    color: #ccc;
+    margin: 0 0 15px 0;
+    line-height: 1.5;
+}
+
+.modal-body input {
+    width: 100%;
+    padding: 12px;
+    margin: 10px 0;
+    border: 1px solid #333;
+    background: #0a0a0a;
+    color: #fff;
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    box-sizing: border-box;
+    transition: border-color 0.2s ease;
+}
+
+.modal-body input:focus {
+    outline: none;
+    border-color: #007acc;
+    box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
+}
+
+.modal-body button {
+    width: 100%;
+    padding: 12px;
+    background: #007acc;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background-color 0.2s ease;
+}
+
+.modal-body button:hover {
+    background: #005a9e;
+}
+
+.modal-body button:active {
+    background: #004785;
+}
+
+.modal-body a {
+    color: #007acc;
+    text-decoration: none;
+}
+
+.modal-body a:hover {
+    text-decoration: underline;
+}
+
+@keyframes modal-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes modal-scale-in {
+    from {
+        opacity: 0;
+        transform: scale(0.9) translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
 }
 
 .model-modal-content {
@@ -597,20 +743,4 @@
     color: #888;
     font-size: 12px;
     margin-top: 2px;
-}
-
-@keyframes modal-fade-in {
-    from { opacity: 0; }
-    to { opacity: 1; }
-}
-
-@keyframes modal-scale-in {
-    from { 
-        opacity: 0;
-        transform: scale(0.9) translateY(20px);
-    }
-    to { 
-        opacity: 1;
-        transform: scale(1) translateY(0);
-    }
 }

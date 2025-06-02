@@ -1,13 +1,13 @@
 {
   "name": "terminal-openrouter-chat",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Terminal-style chat interface using OpenRouter free models with Korean language optimization",
   "main": "src/index.ts",
   "scripts": {
     "build": "tsc",
-    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
     "type-check": "tsc --noEmit",
-    "dev": "wrangler dev"
+    "deploy": "wrangler deploy"
   },
   "keywords": [
     "cloudflare-workers",

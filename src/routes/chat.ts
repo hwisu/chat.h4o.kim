@@ -123,11 +123,11 @@ async function encryptPassword(password: string, secret: string): Promise<string
   const randomBytes = new Uint8Array(32);
   crypto.getRandomValues(randomBytes);
   const nonce = Array.from(randomBytes, byte => byte.toString(16).padStart(2, '0')).join('');
-  
+
   // High-precision timestamp with additional entropy
   const timestamp = Date.now() + Math.random() * 1000;
   const entropy = Math.random().toString(36).substring(2, 15);
-  
+
   // Create header and payload (JWT-like structure)
   const header = { alg: "HS256", typ: "JWT" };
   const payload = {
@@ -138,14 +138,14 @@ async function encryptPassword(password: string, secret: string): Promise<string
     entropy: entropy,
     iss: "chatty-h4o"
   };
-  
+
   // Base64url encode header and payload
   const encodedHeader = btoa(JSON.stringify(header)).replace(/[+/=]/g, (m) => ({'+': '-', '/': '_', '=': ''}[m] || m));
   const encodedPayload = btoa(JSON.stringify(payload)).replace(/[+/=]/g, (m) => ({'+': '-', '/': '_', '=': ''}[m] || m));
-  
+
   // Create message to sign
   const message = `${encodedHeader}.${encodedPayload}`;
-  
+
   // Create HMAC-SHA256 signature using Web Crypto API
   const key = await crypto.subtle.importKey(
     'raw',
@@ -154,18 +154,18 @@ async function encryptPassword(password: string, secret: string): Promise<string
     false,
     ['sign']
   );
-  
+
   const signature = await crypto.subtle.sign(
     'HMAC',
     key,
     new TextEncoder().encode(message)
   );
-  
+
   // Convert signature to base64url
   const signatureArray = new Uint8Array(signature);
   const signatureBase64 = btoa(String.fromCharCode(...signatureArray))
     .replace(/[+/=]/g, (m) => ({'+': '-', '/': '_', '=': ''}[m] || m));
-  
+
   // Return JWT-like token
   return `${message}.${signatureBase64}`;
 }
@@ -178,28 +178,28 @@ async function decryptPassword(encrypted: string, secret: string): Promise<strin
       // Try legacy format fallback
       return decryptLegacyPassword(encrypted, secret);
     }
-    
+
     const [encodedHeader, encodedPayload, signature] = parts;
-    
+
     // Decode header and payload
     const header = JSON.parse(atob(encodedHeader.replace(/[-_]/g, (m) => ({'-': '+', '_': '/'}[m] || m))));
     const payload = JSON.parse(atob(encodedPayload.replace(/[-_]/g, (m) => ({'-': '+', '_': '/'}[m] || m))));
-    
+
     // Verify algorithm
     if (header.alg !== "HS256" || header.typ !== "JWT") {
       return null;
     }
-    
+
     // Check expiration
     if (Date.now() > payload.exp) {
       return null;
     }
-    
+
     // Verify issuer
     if (payload.iss !== "chatty-h4o") {
       return null;
     }
-    
+
     // Recreate the signing key using nonce from payload
     const key = await crypto.subtle.importKey(
       'raw',
@@ -208,25 +208,25 @@ async function decryptPassword(encrypted: string, secret: string): Promise<strin
       false,
       ['verify']
     );
-    
+
     // Verify signature
     const message = `${encodedHeader}.${encodedPayload}`;
     const signatureBytes = Uint8Array.from(
-      atob(signature.replace(/[-_]/g, (m) => ({'-': '+', '_': '/'}[m] || m))), 
+      atob(signature.replace(/[-_]/g, (m) => ({'-': '+', '_': '/'}[m] || m))),
       c => c.charCodeAt(0)
     );
-    
+
     const isValid = await crypto.subtle.verify(
       'HMAC',
       key,
       signatureBytes.buffer,
       new TextEncoder().encode(message)
     );
-    
+
     if (!isValid) {
       return null;
     }
-    
+
     return payload.pwd;
   } catch (error) {
     console.warn('Token verification failed:', error);
@@ -239,10 +239,10 @@ function decryptLegacyPassword(encrypted: string, secret: string): string | null
   try {
     // Restore standard base64 characters
     const restored = encrypted.replace(/[-_]/g, (m) => ({'-': '+', '_': '/'}[m] || m));
-    
+
     // First decode to get the double-encoded content
     const firstDecoded = atob(restored);
-    
+
     // Check if this is a new format (double-encoded) token
     if (firstDecoded.includes('|')) {
       const parts = firstDecoded.split('|');
@@ -283,13 +283,13 @@ function decryptLegacyPassword(encrypted: string, secret: string): string | null
 // Check if user is authenticated OR has valid user API key
 async function checkAuthenticationOrUserKey(c: any): Promise<boolean> {
   const userApiKey = c.req.header('X-User-API-Key');
-  
+
   // If user has provided their own API key, allow access without server authentication
   if (userApiKey && userApiKey.startsWith('sk-or-v1-')) {
     console.log('Access granted with user API key');
     return true;
   }
-  
+
   // Check for session token first (new method)
   const sessionToken = c.req.header('X-Session-Token');
   if (sessionToken) {
@@ -304,7 +304,7 @@ async function checkAuthenticationOrUserKey(c: any): Promise<boolean> {
       console.warn('Failed to verify session token:', error);
     }
   }
-  
+
   // Otherwise, check server authentication (legacy cookie method)
   const accessPassword = c.env.ACCESS_PASSWORD
   const encryptionSecret = c.env.OPENROUTER_API_KEY?.slice(0, 16) || 'default-secret-key';
@@ -312,7 +312,7 @@ async function checkAuthenticationOrUserKey(c: any): Promise<boolean> {
   // Check for password in query, header, or encrypted cookie
   const queryPassword = c.req.query('password');
   const headerPassword = c.req.header('X-Access-Password');
-  
+
   // Improved cookie parsing
   let encryptedCookie = null;
   const cookieHeader = c.req.header('Cookie');
@@ -342,7 +342,7 @@ async function checkAuthenticationOrUserKey(c: any): Promise<boolean> {
   }
 
   const isAuthenticated = providedPassword === accessPassword;
-  
+
   // Log authentication attempts for debugging (remove in production)
   console.log('Auth check:', {
     hasQuery: !!queryPassword,
@@ -360,17 +360,17 @@ async function checkAuthenticationOrUserKey(c: any): Promise<boolean> {
 function getApiKey(c: any): string {
   const userApiKey = c.req.header('X-User-API-Key');
   const serverApiKey = c.env.OPENROUTER_API_KEY;
-  
+
   if (userApiKey && userApiKey.startsWith('sk-or-v1-')) {
     console.log('Using user-provided API key');
     return userApiKey;
   }
-  
+
   if (serverApiKey) {
     console.log('Using server API key');
     return serverApiKey;
   }
-  
+
   throw new Error('No valid API key available');
 }
 
@@ -387,7 +387,7 @@ chat.get('/models', async (c) => {
   try {
     const apiKey = getApiKey(c);
     const hasUserApiKey = c.req.header('X-User-API-Key') !== undefined;
-    
+
     // Check cache first - separate cache for user vs server keys
     const cacheKey = hasUserApiKey ? 'user' : 'server';
     if (modelsCache && modelsCache.type === cacheKey && Date.now() - modelsCache.timestamp < CACHE_DURATION) {
@@ -414,9 +414,9 @@ chat.get('/models', async (c) => {
 
     if (!modelsResponse.ok) {
       if (modelsResponse.status === 401) {
-        return c.json({ 
+        return c.json({
           error: 'Invalid API key. Please check your OpenRouter API key.',
-          auth_required: true 
+          auth_required: true
         }, 401);
       }
       return c.json({ error: 'Failed to fetch models' }, 500);
@@ -455,7 +455,7 @@ chat.get('/models', async (c) => {
         // Then sort by context size (larger first)
         const getContextSize = (model: OpenRouterModel): number => {
           if (model.context_length) return model.context_length;
-          
+
           const modelId = model.id.toLowerCase();
           if (modelId.includes('128k')) return 128000;
           if (modelId.includes('32k')) return 32000;
@@ -491,8 +491,8 @@ chat.get('/models', async (c) => {
     });
   } catch (error) {
     console.error('Error fetching models:', error);
-    return c.json({ 
-      error: error instanceof Error ? error.message : 'Failed to fetch models' 
+    return c.json({
+      error: error instanceof Error ? error.message : 'Failed to fetch models'
     }, 500);
   }
 });
@@ -565,7 +565,7 @@ chat.post('/login', async (c) => {
       return c.json({
         login_success: true,
         session_token: encryptedToken, // Send token to client for session storage
-        response: `✅ Server authentication successful! Welcome to Chatty.\n\n📡 You're now using the server's API key for free access.\n\n🔑 API Key Options:\n• Continue with server key (current)\n• Switch to personal key: /set-api-key <your-key>\n• Check status: /api-key-status\n\nCommands:\n  /models - List available models\n  /set-model <model-id> - Set current model\n  /clear - Clear conversation history\n  /help - Show all commands\n\n💬 Type your message to start chatting!\n\n🧠 Enhanced Features:\n• Conversation context maintained\n• Optimized AI parameters\n• Better response quality\n\n💡 This session will expire when you close the tab.`
+        response: `✅ Server login successful!\n\n📡 Using server API key\n\n💬 Commands:\n• /models - List models\n• /set-model <id> - Set model\n• /clear - Clear chat\n• /help - Show help\n\n🔄 Session expires when tab closes`
       });
     } else {
       return c.json({
@@ -593,7 +593,7 @@ chat.get('/help', async (c) => {
 chat.get('/auth-status', async (c) => {
   const userApiKey = c.req.header('X-User-API-Key');
   const hasUserKey = userApiKey && userApiKey.startsWith('sk-or-v1-');
-  
+
   if (hasUserKey) {
     return c.json({
       authenticated: true,
@@ -603,7 +603,7 @@ chat.get('/auth-status', async (c) => {
   }
 
   const isServerAuth = await checkAuthenticationOrUserKey(c);
-  
+
   if (isServerAuth) {
     return c.json({
       authenticated: true,
@@ -623,7 +623,7 @@ chat.get('/auth-status', async (c) => {
 chat.get('/auth/verify', async (c) => {
   const userApiKey = c.req.header('X-User-API-Key');
   const hasUserKey = userApiKey && userApiKey.startsWith('sk-or-v1-');
-  
+
   if (hasUserKey) {
     return c.json({
       authenticated: true,
@@ -633,7 +633,7 @@ chat.get('/auth/verify', async (c) => {
   }
 
   const isServerAuth = await checkAuthenticationOrUserKey(c);
-  
+
   if (isServerAuth) {
     return c.json({
       authenticated: true,
@@ -662,7 +662,7 @@ chat.post('/chat', async (c) => {
 
   try {
     const requestBody: any = await c.req.json();
-    
+
     console.log('📥 Chat request received:', {
       hasMessage: !!requestBody.message,
       hasModel: !!requestBody.model,
@@ -672,10 +672,10 @@ chat.post('/chat', async (c) => {
       hasB: !!requestBody.b,
       bodyKeys: Object.keys(requestBody)
     });
-    
+
     // Handle compressed data - support LZ-String and enhanced field shortening
     let decompressedData = requestBody;
-    
+
     if (requestBody.compressed && requestBody.compression_method === 'lz-string') {
       // Handle LZ-String compressed data
       try {
@@ -691,7 +691,7 @@ chat.post('/chat', async (c) => {
           frequency_penalty: requestBody.frequency_penalty,
           presence_penalty: requestBody.presence_penalty
         };
-        
+
         // For now, let client handle LZ-String decompression
         // This keeps server-side simple while enabling compression
         console.log('LZ-String compression detected, message extracted');
@@ -706,9 +706,9 @@ chat.post('/chat', async (c) => {
         c: string;
         t: number;
       }
-      
+
       const baseTimestamp = requestBody.b || 0;
-      
+
       decompressedData = {
         message: requestBody.m || requestBody.message,
         conversationHistory: requestBody.h.map((msg: CompressedMessage) => ({
@@ -723,7 +723,7 @@ chat.post('/chat', async (c) => {
         frequency_penalty: requestBody.frequency_penalty,
         presence_penalty: requestBody.presence_penalty
       };
-      
+
       console.log(`📦 Decompressed ${requestBody.h.length} messages from field-shortened format`);
     } else if (requestBody.c) {
       // Handle legacy fallback compression (field name shortening)
@@ -732,7 +732,7 @@ chat.post('/chat', async (c) => {
         c: string;
         t: number;
       }
-      
+
       decompressedData = {
         message: requestBody.m,
         conversationHistory: (requestBody.h || []).map((msg: LegacyCompressedMessage) => ({
@@ -742,10 +742,10 @@ chat.post('/chat', async (c) => {
         }))
       };
     }
-    
-    const { 
-      message, 
-      model, 
+
+    const {
+      message,
+      model,
       conversationHistory = [],
       temperature = 0.7,
       max_tokens = 1500,
@@ -761,7 +761,7 @@ chat.post('/chat', async (c) => {
     // Regular chat message
     try {
       const apiKey = getApiKey(c);
-      
+
       // Get selected model from cookie
       const selectedModelCookie = c.req.header('Cookie')?.includes('selected_model=') ?
         decodeURIComponent(c.req.header('Cookie')?.split('selected_model=')[1]?.split(';')[0] || '') : null;
@@ -812,7 +812,7 @@ chat.post('/chat', async (c) => {
 
       // Prepare messages with conversation context
       const messages = [];
-      
+
       // Add conversation history
       if (conversationHistory && conversationHistory.length > 0) {
         conversationHistory.forEach((msg: { role: string, content: string, timestamp?: number }) => {
@@ -844,7 +844,7 @@ chat.post('/chat', async (c) => {
         presence_penalty: presence_penalty,
         stream: false // Future: could implement streaming
       };
-      
+
       console.log('📤 OpenRouter request:', {
         model: selectedModel,
         messageCount: messages.length,
@@ -877,7 +877,7 @@ chat.post('/chat', async (c) => {
           model: selectedModel,
           messageCount: messages.length
         });
-        
+
         if (chatResponse.status === 401) {
           return c.json({
             error: 'Invalid API key. Please check your OpenRouter API key.',
@@ -885,7 +885,7 @@ chat.post('/chat', async (c) => {
             auth_required: true
           }, 401);
         }
-        
+
         return c.json({
           error: `Chat API error: ${chatResponse.status}`,
           details: errorText

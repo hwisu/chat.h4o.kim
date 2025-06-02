@@ -29,7 +29,7 @@ class TerminalChat {
         this.maxContextSize = 128000; // Will be dynamically set based on selected model
         this.currentTokenUsage = 0; // Current actual token usage (from server)
         this.estimatedTokenUsage = 0; // Estimated usage (client-side)
-        
+
         // Compression settings for efficient communication
         this.enableCompression = true;
         this.compressionMinSize = 500; // Compress messages over 500 bytes
@@ -39,7 +39,7 @@ class TerminalChat {
         // User API key management
         this.userApiKey = null;
         this.encryptionKey = 'chatty-h4o-2025'; // Simple key for local encryption
-        
+
         // Session-based authentication (disappears when tab closes)
         this.sessionToken = null;
 
@@ -88,10 +88,10 @@ class TerminalChat {
         // Initialize basic state from localStorage (but verify with server)
         this.selectedModel = this.getStoredModel();
         this.userApiKey = this.getStoredUserApiKey();
-        
+
         // Restore session token if available
         this.sessionToken = sessionStorage.getItem('session_token');
-        
+
         // Set initial UI state (will be updated after server verification)
         this.updateModelTitle();
         this.setupEventListeners();
@@ -114,7 +114,7 @@ class TerminalChat {
     async initializeAppBackground() {
         // First, always verify authentication with server (cookies are httpOnly)
         await this.updateAuthenticationInfo();
-        
+
         // Update welcome message based on authentication status
         this.updateWelcomeMessage();
 
@@ -215,7 +215,7 @@ class TerminalChat {
         // 사용자 API 키를 사용하는 경우 캐시를 우회하고 최신 모델 목록을 가져옴
         if (this.availableModels.length === 0 || this.userApiKey) {
             try {
-                // Prepare headers with user API key if available
+                // Prepare headers with authentication
                 const headers = { 'Content-Type': 'application/json' };
                 if (this.userApiKey) {
                     headers['X-User-API-Key'] = this.userApiKey;
@@ -243,11 +243,11 @@ class TerminalChat {
                             typeof model === 'string' ? model : model.id
                         );
                         this.setStoredModels(this.availableModels);
-                        
+
                         const modelCount = this.availableModels.length;
                         const keyType = this.userApiKey ? 'personal API key' : 'server key';
                         console.log(`Models loaded in background: ${modelCount} models using ${keyType}`);
-                        
+
                         this.updateModelTitle();
                     }
                 } else {
@@ -317,7 +317,7 @@ class TerminalChat {
         if (existingAuth) {
             existingAuth.remove();
         }
-        
+
         const existingWelcome = document.querySelector('.welcome-message');
         if (existingWelcome) {
             existingWelcome.remove();
@@ -325,51 +325,28 @@ class TerminalChat {
 
         if (!this.isAuthenticated && !this.userApiKey) {
             // Show options for authentication OR API key
-            this.addSystemMessage(`🔐 Choose your access method:\n\n📡 Option 1: Server Login\n• Use /login <password> to authenticate\n• Uses server's API key (free access)\n\n🔑 Option 2: Personal API Key\n• Use /set-api-key <your-key> to set your own key\n• Uses your OpenRouter account and quota\n• Get your key: https://openrouter.ai/settings/keys\n\n💡 You only need to choose ONE option!`, 'auth-required-message');
+            this.addSystemMessage(`🔐 Choose access method:\n\n📡 Server Login: /login <password>\n🔑 Personal Key: /set-api-key <key>\n\n💡 Choose ONE option`, 'auth-required-message');
             return;
         }
 
         // Show welcome message when authenticated
         let accessMethod = '';
         if (this.userApiKey) {
-            accessMethod = '🔑 Using your personal API key';
+            accessMethod = '🔑 Personal API Key';
         } else if (this.isAuthenticated) {
-            accessMethod = '📡 Using server API key';
+            accessMethod = '📡 Server Key';
         }
-        
-        this.addSystemMessage(`✅ Welcome to Chatty!\n\n🧠 Features:\n• Conversation context maintained across messages\n• Type /help to see available commands\n• Start chatting with AI models!\n\n${accessMethod}`, 'welcome-message');
+
+        this.addSystemMessage(`✅ Welcome to Chatty!\n\n${accessMethod}\n\n💬 Start chatting or type /help for commands`, 'welcome-message');
     }
 
     setAuthenticated(authenticated) {
         this.isAuthenticated = authenticated;
-        if (authenticated) {
-            if (this.statusIndicator) {
-                this.statusIndicator.classList.add('authenticated');
-            }
-            if (this.authStatus) {
-                this.authStatus.textContent = '📡 Server Password';
-                this.authStatus.style.color = '#00ff00';
-            }
+        this.updateAuthStatus();
 
-            // Load models when authenticated
-            this.loadModelsBackground();
-            // Update welcome message to remove auth prompts
-            this.updateWelcomeMessage();
-        } else {
-            if (this.statusIndicator) {
-                this.statusIndicator.classList.remove('authenticated');
-            }
-            if (this.authStatus) {
-                if (this.userApiKey) {
-                    this.authStatus.textContent = '🔑 Personal API Key';
-                    this.authStatus.style.color = '#00aa00';
-                } else {
-                    this.authStatus.textContent = 'Choose access method';
-                    this.authStatus.style.color = '#666';
-                }
-            }
-            // Update welcome message to show auth prompts
-            this.updateWelcomeMessage();
+        // 인증 상태 변경 후 즉시 모델 목록 갱신
+        if (authenticated) {
+            this.initializeModelsBackground();
         }
     }
 
@@ -434,17 +411,17 @@ class TerminalChat {
                     this.hideModelModal();
                 }
             };
-            
+
             this.modelModal.addEventListener('click', handleBackdropClick);
-            
+
             // Add touch support for backdrop
             if ('ontouchstart' in window) {
                 let touchStartTarget = null;
-                
+
                 this.modelModal.addEventListener('touchstart', (e) => {
                     touchStartTarget = e.target;
                 }, { passive: true });
-                
+
                 this.modelModal.addEventListener('touchend', (e) => {
                     // Only close if touch started and ended on the backdrop
                     if (touchStartTarget === this.modelModal && e.target === this.modelModal) {
@@ -547,10 +524,10 @@ class TerminalChat {
         try {
             // Prepare messages for API
             const messages = this.prepareMessagesForAPI(userInput);
-            
+
             // Compress conversation history if needed
             const compressionResult = this.compressConversationHistory(this.conversationHistory);
-            
+
             // Prepare request data
             let requestData = {
                 message: userInput,
@@ -579,7 +556,7 @@ class TerminalChat {
                 }
             }
 
-            // Prepare headers
+            // Make API request
             const headers = { 'Content-Type': 'application/json' };
             if (this.userApiKey) {
                 headers['X-User-API-Key'] = this.userApiKey;
@@ -596,39 +573,39 @@ class TerminalChat {
 
             if (!response.ok) {
                 const errorData = await response.json();
-                
+
                 if (response.status === 401) {
                     this.setAuthenticated(false);
                     this.addMessage(errorData.response || '❌ Authentication required. Please login first.', 'error');
                     return;
                 }
-                
+
                 throw new Error(errorData.error || `HTTP ${response.status}`);
             }
 
             const data = await response.json();
-            
+
             if (!data.response) {
                 throw new Error('Empty response from server');
             }
 
             // Add assistant response to conversation
             this.addMessage(data.response, 'assistant');
-            
+
             // Update actual token usage if provided by server
             if (data.usage) {
                 const totalTokens = data.usage.total_tokens || (data.usage.prompt_tokens + data.usage.completion_tokens);
                 this.currentTokenUsage = totalTokens;
-                
+
                 // Add assistant message with actual token count
                 this.addToConversationHistory('assistant', data.response, data.usage.completion_tokens);
-                
+
                 console.log(`📊 Token usage: ${data.usage.prompt_tokens} prompt + ${data.usage.completion_tokens} completion = ${totalTokens} total`);
             } else {
                 // Fallback to estimated tokens
                 this.addToConversationHistory('assistant', data.response);
             }
-            
+
             // Update context display
             this.updateContextDisplay();
 
@@ -647,7 +624,7 @@ class TerminalChat {
         this.input.value = '';
         this.autoResizeTextarea();
         this.updateSendButton();
-        
+
         return new Promise(async (resolve) => {
             const parts = message.substring(1).split(' ');
             const command = parts[0].toLowerCase();
@@ -663,26 +640,33 @@ class TerminalChat {
                             this.addMessage('❌ Password required.\n\nUsage: /login <password>', 'error');
                             break;
                         }
-                        
+
                         const password = args.join(' ');
                         const loginResponse = await fetch('/api/login', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ password })
                         });
-                        
+
                         const loginData = await loginResponse.json();
-                        
+
                         if (loginResponse.ok && loginData.login_success) {
-                            this.setAuthenticated(true);
-                            this.addMessage(loginData.response, 'system');
                             // Save session token for this tab session
                             if (loginData.session_token) {
                                 this.sessionToken = loginData.session_token;
                                 sessionStorage.setItem('session_token', this.sessionToken);
                             }
-                            // Remove auth required messages and update welcome
+
+                            // Update authentication info from server
+                            await this.updateAuthenticationInfo();
+
+                            // Load models with authentication
+                            await this.initializeModelsBackground();
+
+                            // Update welcome message
                             this.updateWelcomeMessage();
+
+                            this.addMessage(loginData.response, 'system');
                             success = true;
                         } else {
                             this.addMessage(loginData.response || '❌ Authentication failed.', 'error');
@@ -713,7 +697,7 @@ class TerminalChat {
                             this.addMessage('❌ Model ID required.\n\nUsage: /set-model <model-id> or /set-model auto', 'error');
                             break;
                         }
-                        
+
                         const modelId = args.join(' ');
                         await this.setModel(modelId);
                         success = true;
@@ -724,7 +708,7 @@ class TerminalChat {
                             this.addMessage('❌ API key required.\n\nUsage: /set-api-key <your-openrouter-key>\n\nGet your key: https://openrouter.ai/settings/keys', 'error');
                             break;
                         }
-                        
+
                         const apiKey = args.join(' ');
                         await this.setUserApiKey(apiKey);
                         success = true;
@@ -765,6 +749,9 @@ class TerminalChat {
             if (this.userApiKey) {
                 headers['X-User-API-Key'] = this.userApiKey;
             }
+            if (this.sessionToken) {
+                headers['X-Session-Token'] = this.sessionToken;
+            }
 
             const response = await fetch('/api/models', {
                 method: 'GET',
@@ -796,13 +783,13 @@ class TerminalChat {
     async setModel(modelId) {
         this.selectedModel = modelId;
         localStorage.setItem('selectedModel', modelId);
-        
+
         // Update model info and context size
         this.updateModelInfo(modelId);
-        
+
         // Update title
         this.updateModelTitle();
-        
+
         this.addMessage(`✅ Model set to: ${modelId}`, 'system');
     }
 
@@ -818,23 +805,22 @@ class TerminalChat {
             const encryptedKey = this.simpleEncrypt(apiKey, this.encryptionKey);
             localStorage.setItem('user-api-key', encryptedKey);
             this.userApiKey = apiKey;
-            
-            // Update auth status
-            this.setAuthenticated(false); // Reset server auth
-            this.updateAuthStatus();
-            
+
+            // Update auth status immediately from server
+            await this.updateAuthenticationInfo();
+
             // Clear models cache to force refresh with new key
             this.availableModels = [];
             localStorage.removeItem('cached-models');
-            
+
             // Update welcome message to show API key usage
             this.updateWelcomeMessage();
-            
-            this.addMessage('✅ Personal API key set successfully!\n\n🔑 You\'re now using your own OpenRouter account.\n\nFeatures:\n• Access to all models in your account\n• Uses your quota and billing\n• Commands: /models, /set-model <id>\n\n💡 Your key is stored locally and encrypted.', 'system');
-            
+
+            this.addMessage('✅ Personal API key set!\n\n🔑 Using your OpenRouter account\n💡 Commands: /models, /set-model <id>', 'system');
+
             // Load models with new key
             await this.loadModelsBackground();
-            
+
         } catch (error) {
             console.error('API key setup error:', error);
             this.addMessage(`❌ Error setting API key: ${error.message}`, 'error');
@@ -844,27 +830,28 @@ class TerminalChat {
     removeUserApiKey() {
         localStorage.removeItem('user-api-key');
         this.userApiKey = null;
-        this.setAuthenticated(false);
-        this.updateAuthStatus();
-        
+
         // Clear models cache
         this.availableModels = [];
         localStorage.removeItem('cached-models');
-        
-        // Update welcome message to show authentication options
-        this.updateWelcomeMessage();
-        
-        this.addMessage('✅ Personal API key removed.\n\n📡 You can now:\n• Login with server password: /login <password>\n• Or set a new personal key: /set-api-key <key>', 'system');
+
+        // Update auth status immediately from server
+        this.updateAuthenticationInfo().then(() => {
+            // Update welcome message
+            this.updateWelcomeMessage();
+        });
+
+        this.addMessage('✅ Personal API key removed\n\n📡 Use /login <password> or /set-api-key <key>', 'system');
     }
 
     showApiKeyStatus() {
         if (this.userApiKey) {
             const maskedKey = this.userApiKey.substring(0, 8) + '...' + this.userApiKey.substring(this.userApiKey.length - 4);
-            this.addMessage(`🔑 Personal API Key Status: Active\n\nKey: ${maskedKey}\nSource: Local storage (encrypted)\n\nCommands:\n• /remove-api-key - Remove current key\n• /models - View available models`, 'system');
+            this.addMessage(`🔑 Personal API Key: Active\n\nKey: ${maskedKey}\n\n• /remove-api-key - Remove key\n• /models - View models`, 'system');
         } else if (this.isAuthenticated) {
-            this.addMessage(`📡 Server Authentication: Active\n\nUsing server's API key for free access.\n\nCommands:\n• /set-api-key <key> - Switch to personal key\n• /models - View available models`, 'system');
+            this.addMessage(`📡 Server Authentication: Active\n\n• /set-api-key <key> - Switch to personal\n• /models - View models`, 'system');
         } else {
-            this.addMessage(`❌ No authentication active.\n\nChoose one option:\n• /login <password> - Use server key\n• /set-api-key <key> - Use personal key\n\nGet API key: https://openrouter.ai/settings/keys`, 'system');
+            this.addMessage(`❌ No authentication\n\n• /login <password> - Server key\n• /set-api-key <key> - Personal key`, 'system');
         }
     }
 
@@ -916,7 +903,7 @@ class TerminalChat {
         const timestamp = new Date().toLocaleTimeString();
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${role}-message`;
-        
+
         let header = '';
         if (role === 'user') {
             header = `[USER] ${timestamp}`;
@@ -930,15 +917,15 @@ class TerminalChat {
         } else if (role === 'error') {
             header = `[ERROR] ${timestamp}`;
         }
-        
+
         messageDiv.innerHTML = `
             <div class="message-header">${header}</div>
             <div class="message-content">${role === 'assistant' ? this.markdownParser.renderContent(content) : this.escapeHtml(content)}</div>
         `;
-        
+
         this.output.appendChild(messageDiv);
         this.scrollToBottom();
-        
+
         // Syntax highlighting for code blocks if it's an assistant message
         if (role === 'assistant' && typeof hljs !== 'undefined') {
             messageDiv.querySelectorAll('pre code').forEach((block) => {
@@ -971,7 +958,7 @@ class TerminalChat {
 
     shortenModelName(modelName) {
         if (!modelName) return '';
-        
+
         // Remove common prefixes and make more readable
         let shortened = modelName
             .replace(/^(meta-llama\/|google\/|anthropic\/|openai\/|mistralai\/|microsoft\/|huggingfaceh4\/|nousresearch\/|teknium\/|gryphe\/|undi95\/|koboldai\/|pygmalionai\/|alpindale\/|jondurbin\/|neversleep\/|cognitivecomputations\/|lizpreciatior\/|migtissera\/|austism\/|xwin-lm\/|01-ai\/|togethercomputer\/|nvidia\/|intel\/|sambanova\/)/i, '')
@@ -981,12 +968,12 @@ class TerminalChat {
             .replace(/-v\d+(\.\d+)*$/, '')
             .replace(/(\d+)b$/, '$1B')
             .replace(/(\d+)x(\d+)b$/, '$1×$2B');
-        
+
         // Truncate if still too long
         if (shortened.length > 20) {
             shortened = shortened.substring(0, 17) + '...';
         }
-        
+
         return shortened;
     }
 
@@ -1028,33 +1015,32 @@ class TerminalChat {
             const modelId = typeof model === 'string' ? model : model.id;
             const modelItem = document.createElement('div');
             modelItem.className = 'model-item';
-            
+
             // Check if this is the currently selected model
             if (modelId === this.selectedModel) {
                 modelItem.classList.add('selected');
             }
-            
+
             modelItem.innerHTML = `
                 <div class="model-name">${this.shortenModelName(modelId)}</div>
-                <div class="model-id">${modelId}</div>
             `;
-            
+
             // Add both click and touch events for better mobile support
             const selectModel = () => {
                 this.setModel(modelId);
                 this.hideModelModal();
             };
-            
+
             modelItem.addEventListener('click', selectModel);
-            
+
             // Enhanced touch support for mobile
             if ('ontouchstart' in window) {
                 let touchStartTime = 0;
-                
+
                 modelItem.addEventListener('touchstart', (e) => {
                     touchStartTime = Date.now();
                 }, { passive: true });
-                
+
                 modelItem.addEventListener('touchend', (e) => {
                     e.preventDefault();
                     const touchDuration = Date.now() - touchStartTime;
@@ -1063,7 +1049,7 @@ class TerminalChat {
                     }
                 }, { passive: false });
             }
-            
+
             this.modelList.appendChild(modelItem);
         });
     }
@@ -1071,17 +1057,17 @@ class TerminalChat {
     // Update model information and context size
     updateModelInfo(modelName) {
         // Find model in available models list
-        const modelInfo = this.availableModels.find(m => 
+        const modelInfo = this.availableModels.find(m =>
             (typeof m === 'string' ? m : m.id) === modelName
         );
-        
+
         if (modelInfo && typeof modelInfo === 'object' && modelInfo.context_length) {
             this.selectedModelInfo = {
                 id: modelName,
                 context_length: modelInfo.context_length
             };
             this.maxContextSize = modelInfo.context_length;
-            
+
             console.log(`📏 Model context updated: ${modelName} -> ${modelInfo.context_length} tokens`);
         } else {
             // Fallback for models without context info or string-only models
@@ -1090,10 +1076,10 @@ class TerminalChat {
                 context_length: this.getDefaultContextSize(modelName)
             };
             this.maxContextSize = this.selectedModelInfo.context_length;
-            
+
             console.log(`📏 Model context fallback: ${modelName} -> ${this.maxContextSize} tokens (estimated)`);
         }
-        
+
         // Update context display immediately
         this.updateContextDisplay();
     }
@@ -1101,9 +1087,9 @@ class TerminalChat {
     // Get default context size based on model name patterns
     getDefaultContextSize(modelName) {
         if (!modelName) return 128000;
-        
+
         const name = modelName.toLowerCase();
-        
+
         // Known context sizes for popular models
         if (name.includes('claude-3.5-sonnet')) return 200000;
         if (name.includes('claude-3') && name.includes('haiku')) return 200000;
@@ -1123,7 +1109,7 @@ class TerminalChat {
         if (name.includes('gemini-1.5')) return 1000000; // 1M context
         if (name.includes('gemini')) return 32000;
         if (name.includes('gemma-2')) return 8000;
-        
+
         // Default fallback
         return 128000;
     }
@@ -1132,30 +1118,30 @@ class TerminalChat {
     calculateCurrentTokenUsage() {
         // Calculate estimated tokens for all messages that will be sent to API
         let totalTokens = 0;
-        
+
         this.conversationHistory.forEach(msg => {
             totalTokens += this.estimateTokens(msg.content);
         });
-        
+
         this.estimatedTokenUsage = totalTokens;
-        
+
         // Use actual token usage if available, otherwise fall back to estimated
         const actualUsage = this.currentTokenUsage || this.estimatedTokenUsage;
-        
+
         // Auto-trim conversation if it exceeds 80% of model context
         const contextLimit = this.maxContextSize * 0.8; // Use 80% of available context
         if (actualUsage > contextLimit && this.conversationHistory.length > 2) {
             console.log(`🔄 Auto-trimming conversation: ${actualUsage} > ${contextLimit} tokens`);
-            
+
             // Remove oldest messages until we're under the limit
             while (this.estimatedTokenUsage > contextLimit && this.conversationHistory.length > 2) {
                 const removed = this.conversationHistory.shift();
                 this.estimatedTokenUsage -= this.estimateTokens(removed.content);
             }
-            
+
             console.log(`✂️ Trimmed to ${this.conversationHistory.length} messages, ~${this.estimatedTokenUsage} tokens`);
         }
-        
+
         this.updateContextDisplay();
         return actualUsage;
     }
@@ -1168,7 +1154,7 @@ class TerminalChat {
         const displayUsage = this.currentTokenUsage || this.estimatedTokenUsage;
         const remainingTokens = this.maxContextSize - displayUsage;
         const usagePercentage = Math.round((displayUsage / this.maxContextSize) * 100);
-        
+
         // Format context size display
         let contextSizeDisplay;
         if (this.maxContextSize >= 1000000) {
@@ -1178,7 +1164,7 @@ class TerminalChat {
         } else {
             contextSizeDisplay = this.maxContextSize.toString();
         }
-        
+
         // Show: "Context: 128k (5%)" with indicator for actual vs estimated
         const usageIndicator = this.currentTokenUsage > 0 ? '' : '~'; // ~ for estimated
         const displayText = `Context: ${contextSizeDisplay} (${usageIndicator}${usagePercentage}%)`;
@@ -1197,7 +1183,7 @@ class TerminalChat {
     // Add message to conversation history
     addToConversationHistory(role, content, actualTokens = null) {
         const estimatedTokens = this.estimateTokens(content);
-        
+
         this.conversationHistory.push({
             role: role,
             content: content,
@@ -1282,7 +1268,7 @@ class TerminalChat {
                 this.statusIndicator.classList.add('authenticated');
             }
             if (this.authStatus) {
-                this.authStatus.textContent = '📡 Server Password';
+                this.authStatus.textContent = '📡 Server Key';
                 this.authStatus.style.color = '#00ff00';
             }
         } else {
@@ -1302,14 +1288,14 @@ class TerminalChat {
             if (!modelName || modelName === 'auto') {
                 modelName = this.availableModels && this.availableModels.length > 0 ? this.availableModels[0] : 'whoami';
             }
-            
+
             let displayName = this.shortenModelName(modelName) || modelName;
-            
+
             // 사용자 API 키 사용시 표시 추가
             if (this.userApiKey) {
                 displayName += ' 👑';
             }
-            
+
             this.modelTitle.textContent = displayName;
         }
     }
@@ -1367,7 +1353,7 @@ class TerminalChat {
                 this.isAuthenticated = data.authenticated;
                 this.authMethod = data.auth_method;
                 this.authType = data.auth_type;
-                
+
                 console.log('Auth status updated:', {
                     authenticated: this.isAuthenticated,
                     method: this.authMethod,
@@ -1387,7 +1373,7 @@ class TerminalChat {
             this.authType = null;
             console.log('Auth status check failed:', error.message);
         }
-        
+
         this.updateAuthStatus();
     }
 
