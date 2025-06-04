@@ -7,3 +7,9 @@ compatibility_flags = ["nodejs_compat"]
 [assets]
 directory = "public"
 binding = "ASSETS"
+
+# D1 Database binding
+[[d1_databases]]
+binding = "DB" # Worker에서 env.DB로 접근 가능
+database_name = "chat-contexts"
+database_id = "a41896bf-d115-4d65-aa9b-36213d77db77"

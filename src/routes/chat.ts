@@ -103,6 +103,36 @@ function prepareChatRequest(
   };
 }
 
+// 타임아웃과 함께 OpenRouter API를 호출하는 함수
+async function callOpenRouterAPI(apiKey: string, body: any, timeoutMs: number = 15000): Promise<Response> {
+  // 타임아웃 설정으로 응답 속도 개선
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://chat.h4o.kim',
+        'X-Title': 'Chatty',
+        'Accept-Encoding': 'gzip, deflate, br'
+      },
+      body: JSON.stringify(body),
+      cf: {
+        cacheTtl: 0,
+        cacheEverything: false
+      },
+      signal: controller.signal
+    });
+
+    return response;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 // POST /api/chat - 서버 컨텍스트 기반 채팅
 chat.post('/chat', async (c) => {
   // Check authentication first
@@ -139,11 +169,11 @@ chat.post('/chat', async (c) => {
       const currentRole = getUserRole(sessionId);
 
       // 서버에서 컨텍스트 가져오기/생성
-      const context = await contextManager.getOrCreateContext(userId, model || 'auto', currentRole);
+      const context = await contextManager.getOrCreateContext(userId);
 
       // API 키 및 모델 설정
       const apiKey = getApiKey(c);
-      const selectedModel = await getSelectedModel(c, model || context.model, true);
+      const selectedModel = await getSelectedModel(c, model, true);
       const systemPrompt = getRoleSystemPrompt(currentRole);
 
       // 사용자 메시지를 컨텍스트에 추가
@@ -180,92 +210,64 @@ chat.post('/chat', async (c) => {
         presence_penalty
       );
 
-      // 타임아웃 설정으로 응답 속도 개선
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15초 타임아웃
+      const chatResponse = await callOpenRouterAPI(apiKey, chatRequestBody);
 
-      try {
-        const chatResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-            'HTTP-Referer': 'https://chat.h4o.kim',
-            'X-Title': 'Chatty',
-            'Accept-Encoding': 'gzip, deflate, br'
-          },
-          body: JSON.stringify(chatRequestBody),
-          cf: {
-            cacheTtl: 0,
-            cacheEverything: false
-          },
-          signal: controller.signal
+      if (!chatResponse.ok) {
+        const errorText = await chatResponse.text();
+        console.error('OpenRouter API error:', {
+          status: chatResponse.status,
+          statusText: chatResponse.statusText,
+          model: selectedModel,
+          messageCount: messages.length
         });
 
-        clearTimeout(timeoutId);
-
-        if (!chatResponse.ok) {
-          const errorText = await chatResponse.text();
-          console.error('OpenRouter API error:', {
-            status: chatResponse.status,
-            statusText: chatResponse.statusText,
-            model: selectedModel,
-            messageCount: messages.length
-          });
-
-          if (chatResponse.status === 401) {
-            return c.json({
-              error: 'Invalid API key. Please check your OpenRouter API key.',
-              details: errorText,
-              auth_required: true
-            }, 401);
-          }
-
+        if (chatResponse.status === 401) {
           return c.json({
-            error: `Chat API error: ${chatResponse.status}`,
-            details: errorText
-          }, 500);
+            error: 'Invalid API key. Please check your OpenRouter API key.',
+            details: errorText,
+            auth_required: true
+          }, 401);
         }
 
-        const chatData: ChatCompletionResponse = await chatResponse.json();
-
-        if (!chatData.choices?.[0]?.message) {
-          return c.json({ error: 'Invalid response structure' }, 500);
-        }
-
-        const assistantResponse = chatData.choices[0].message.content || '';
-
-        // 어시스턴트 응답을 컨텍스트에 추가
-        await contextManager.addMessage(userId, 'assistant', assistantResponse);
-
-        // 컨텍스트 업데이트 (요약, 토큰 사용량 등)
-        await contextManager.updateContext(userId, {
-          summary: contextResult.currentSummary,
-          conversationHistory: [...contextResult.finalMessages,
-            { role: 'user', content: message, timestamp: Date.now() },
-            { role: 'assistant', content: assistantResponse, timestamp: Date.now() }
-          ],
-          tokenUsage: chatData.usage?.total_tokens || 0,
-          model: selectedModel,
-          role: currentRole
-        });
-
-        // 응답 데이터 구성
-        const responseData = {
-          response: assistantResponse,
-          model: selectedModel,
-          usage: chatData.usage,
-          summaryApplied: !!contextResult.summaryData,
-          summarizedMessageCount: contextResult.summaryData?.summarizedMessageCount || 0,
-          messageCount: updatedContext.conversationHistory.length + 1, // +1 for assistant response
-          timestamp: Date.now()
-        };
-
-        return c.json(responseData);
-      } finally {
-        clearTimeout(timeoutId);
+        return c.json({
+          error: `Chat API error: ${chatResponse.status}`,
+          details: errorText
+        }, 500);
       }
 
+      const chatData: ChatCompletionResponse = await chatResponse.json();
+
+      if (!chatData.choices?.[0]?.message) {
+        return c.json({ error: 'Invalid response structure' }, 500);
+      }
+
+      const assistantResponse = chatData.choices[0].message.content || '';
+
+      // 어시스턴트 응답을 컨텍스트에 추가
+      await contextManager.addMessage(userId, 'assistant', assistantResponse);
+
+      // 컨텍스트 업데이트 (요약, 토큰 사용량 등)
+      await contextManager.updateContext(userId, {
+        summary: contextResult.currentSummary,
+        conversationHistory: [...contextResult.finalMessages,
+          { role: 'user', content: message, timestamp: Date.now() },
+          { role: 'assistant', content: assistantResponse, timestamp: Date.now() }
+        ],
+        tokenUsage: chatData.usage?.total_tokens || 0
+      });
+
+      // 응답 데이터 구성
+      const responseData = {
+        response: assistantResponse,
+        model: selectedModel,
+        usage: chatData.usage,
+        summaryApplied: !!contextResult.summaryData,
+        summarizedMessageCount: contextResult.summaryData?.summarizedMessageCount || 0,
+        messageCount: updatedContext.conversationHistory.length + 1, // +1 for assistant response
+        timestamp: Date.now()
+      };
+
+      return c.json(responseData);
     } catch (apiError) {
       console.error('API error:', apiError);
       return c.json({

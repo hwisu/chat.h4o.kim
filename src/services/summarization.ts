@@ -1,4 +1,4 @@
-import { ChatMessage, OpenRouterModel, OpenRouterModelsResponse } from '../types';
+import { ChatMessage, OpenRouterModel, OpenRouterModelsResponse, ChatCompletionResponse } from '../types';
 
 // 요약 설정
 export interface SummarizationConfig {
@@ -89,12 +89,10 @@ function filterSummaryModels(models: OpenRouterModel[]): OpenRouterModel[] {
 async function getSummaryModels(apiKey: string): Promise<OpenRouterModel[]> {
   // 캐시 확인
   if (summaryModelsCache && Date.now() - summaryModelsCache.timestamp < SUMMARY_CACHE_DURATION) {
-    // console.log('📋 Using cached summary models');
     return summaryModelsCache.models;
   }
 
   try {
-    // console.log('🔄 Fetching models for summary...');
     const response = await fetch('https://openrouter.ai/api/v1/models', {
       headers: {
         'Authorization': `Bearer ${apiKey}`,
@@ -115,7 +113,6 @@ async function getSummaryModels(apiKey: string): Promise<OpenRouterModel[]> {
       timestamp: Date.now()
     };
 
-    // console.log(`✅ Loaded ${summaryModels.length} summary models`);
     return summaryModels;
 
   } catch (error) {
@@ -176,7 +173,6 @@ export function shouldTriggerSummary(
   config: SummarizationConfig = DEFAULT_SUMMARY_CONFIG
 ): boolean {
   const totalTokens = estimateTokenCount(messages);
-  // console.log(`📊 Current conversation tokens: ${totalTokens}, threshold: ${config.maxTokensBeforeSummary}`);
   return totalTokens > config.maxTokensBeforeSummary;
 }
 
@@ -193,8 +189,6 @@ function findOptimalRetainMessages(
   let retainTokens = 0;
   let retainIndex = messages.length;
 
-  // console.log(`🔍 Finding optimal split for ${messages.length} messages (target: ${config.targetRetainTokens}, max: ${config.maxRetainTokens} tokens)`);
-
   // 뒤에서부터 토큰을 세면서 적절한 지점 찾기
   for (let i = messages.length - 1; i >= 0; i--) {
     const messageTokens = estimateTokenCount([messages[i]]);
@@ -203,22 +197,18 @@ function findOptimalRetainMessages(
     if (retainTokens + messageTokens <= config.maxRetainTokens) {
       retainTokens += messageTokens;
       retainIndex = i;
-      // console.log(`📌 Including message ${i} (${messages[i].role}): +${messageTokens} tokens (total: ${retainTokens})`);
     } else {
-      // console.log(`🚫 Skipping message ${i} (${messages[i].role}): would exceed max tokens (${retainTokens + messageTokens} > ${config.maxRetainTokens})`);
       break;
     }
   }
 
   // 최소 토큰 보장 및 대화 완전성 확보
   if (retainTokens < config.minRetainTokens && retainIndex > 0) {
-    // console.log(`⬆️ Expanding retention: ${retainTokens} < ${config.minRetainTokens} (min required)`);
     // 최소 토큰에 도달할 때까지 더 포함
     for (let i = retainIndex - 1; i >= 0; i--) {
       const messageTokens = estimateTokenCount([messages[i]]);
       retainTokens += messageTokens;
       retainIndex = i;
-      // console.log(`📌 Adding message ${i} (${messages[i].role}) for min tokens: +${messageTokens} tokens (total: ${retainTokens})`);
 
       if (retainTokens >= config.minRetainTokens) {
         break;
@@ -226,35 +216,16 @@ function findOptimalRetainMessages(
     }
   }
 
-  // console.log(`📊 Initial split at index ${retainIndex}: ${messages.length - retainIndex} messages to retain (~${retainTokens} tokens)`);
-
   // 대화 완전성 확보: user-assistant 페어가 완전히 유지되도록 조정
   const originalIndex = retainIndex;
   retainIndex = ensureConversationCompleteness(messages, retainIndex);
 
   if (retainIndex !== originalIndex) {
-    const newRetainCount = messages.length - retainIndex;
-    const newRetainTokens = estimateTokenCount(messages.slice(retainIndex));
-    // console.log(`🔄 Split adjusted for message pairs: ${messages.length - originalIndex} -> ${newRetainCount} messages (~${newRetainTokens} tokens)`);
-    retainTokens = newRetainTokens;
+    retainTokens = estimateTokenCount(messages.slice(retainIndex));
   }
 
   const messagesToSummarize = messages.slice(0, retainIndex);
   const messagesToRetain = messages.slice(retainIndex);
-
-  // console.log(`💭 Final split: summarize ${messagesToSummarize.length} messages, retain ${messagesToRetain.length} messages`);
-  // console.log(`🔢 Token distribution: ~${estimateTokenCount(messagesToSummarize)} to summarize, ~${estimateTokenCount(messagesToRetain)} to retain`);
-
-  // 대화 쌍 무결성 검증
-  if (messagesToSummarize.length > 0 && messagesToRetain.length > 0) {
-    const lastSummary = messagesToSummarize[messagesToSummarize.length - 1];
-    const firstRetain = messagesToRetain[0];
-    // console.log(`🔍 Split boundary: ${lastSummary.role} (summary) | ${firstRetain.role} (retain)`);
-
-    if (lastSummary.role === 'user' && firstRetain.role === 'assistant') {
-      console.warn(`⚠️ WARNING: User question separated from assistant answer! This should not happen.`);
-    }
-  }
 
   return { messagesToSummarize, messagesToRetain };
 }
@@ -281,7 +252,6 @@ function ensureConversationCompleteness(messages: ChatMessage[], splitIndex: num
       if (i < adjustedIndex && i + 1 >= adjustedIndex) {
         // assistant를 요약 부분으로 이동 (쌍을 유지)
         adjustedIndex = i + 2;
-        // console.log(`🔄 Adjusting split: moved assistant response (${i + 1}) to summary to keep user-assistant pair together`);
       }
       // assistant가 요약 부분에, 다음 user가 유지 부분에 있는 경우
       else if (i + 1 < adjustedIndex && i + 2 < messages.length && i + 2 >= adjustedIndex) {
@@ -303,29 +273,16 @@ function ensureConversationCompleteness(messages: ChatMessage[], splitIndex: num
 
     // assistant -> user로 자연스럽게 전환되는 것이 이상적
     if (lastSummaryMsg.role === 'assistant' && firstRetainMsg.role === 'user') {
-      // console.log(`✅ Clean split: assistant (summary) -> user (retain) at index ${adjustedIndex}`);
     } else if (lastSummaryMsg.role === 'user' && firstRetainMsg.role === 'assistant') {
       // user -> assistant 쌍이 분리된 경우, assistant를 요약으로 이동
       adjustedIndex = adjustedIndex + 1;
-      // console.log(`🔄 Final adjustment: moved assistant to summary to complete user-assistant pair`);
     }
   }
 
   if (adjustedIndex !== splitIndex) {
-    // console.log(`📍 Split index adjusted: ${splitIndex} -> ${adjustedIndex} to preserve message pairs`);
   }
 
   return adjustedIndex;
-}
-
-// 유지할 최근 메시지 개수 결정 (동적) - 이제 사용하지 않음
-function getRetainMessageCount(
-  totalMessages: number,
-  config: SummarizationConfig = DEFAULT_SUMMARY_CONFIG
-): number {
-  // 토큰 기반으로 변경되어 이 함수는 더 이상 사용하지 않음
-  // 하위 호환성을 위해 유지
-  return Math.min(totalMessages, 10);
 }
 
 // 대화 요약 생성
@@ -334,77 +291,72 @@ export async function summarizeConversation(
   apiKey: string,
   config: SummarizationConfig = DEFAULT_SUMMARY_CONFIG
 ): Promise<string> {
-
-  // 최적의 분할점 찾기
-  const { messagesToSummarize, messagesToRetain } = findOptimalRetainMessages(messages, config);
-
-  if (messagesToSummarize.length === 0) {
+  if (!messages || messages.length === 0) {
     return '';
   }
 
-  const conversationText = messagesToSummarize
-    .map(m => `${m.role === 'user' ? '사용자' : '어시스턴트'}: ${m.content}`)
-    .join('\n\n');
+  // 요약 모델 목록 가져오기
+  const summaryModels = await getSummaryModels(apiKey);
 
-  const availableModels = await getSummaryModels(apiKey);
-
-  if (availableModels.length === 0) {
-    throw new Error('No summary models available');
+  if (summaryModels.length === 0) {
+    throw new Error('No suitable summary models available');
   }
 
-  // 우선순위대로 모델 시도 (상위 2개만 시도하도록 제한)
-  for (const model of availableModels.slice(0, 2)) {
-    try {
-      // 타임아웃 설정
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10초 타임아웃
+  // 메시지 형식 변환 및 대화 텍스트 생성
+  const conversationText = messages.map(msg => {
+    const role = msg.role.charAt(0).toUpperCase() + msg.role.slice(1);
+    return `${role}: ${msg.content}`;
+  }).join('\n\n');
 
-      try {
-        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-            'HTTP-Referer': 'https://chat.h4o.kim',
-            'X-Title': 'Chatty-Summary'
-          },
-          body: JSON.stringify({
-            model: model.id,
-            messages: [{
-              role: 'user',
-              content: SUMMARY_PROMPT.replace('{conversation}', conversationText)
-            }],
-            max_tokens: config.summaryTargetTokens,
-            temperature: 0.3,  // 일관성을 위해 낮게
-            top_p: 0.9
-          }),
-          signal: controller.signal
-        });
+  // 요약 프롬프트 구성
+  const promptText = SUMMARY_PROMPT.replace('{conversation}', conversationText);
 
-        clearTimeout(timeoutId);
+  // 첫 번째 적합한 모델 선택
+  const selectedModel = summaryModels[0];
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.warn(`⚠️ Summary model ${model.id} failed: ${response.status} - ${errorText}`);
-          continue; // 다음 모델 시도
-        }
+  try {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://chat.h4o.kim',
+        'X-Title': 'Chatty-Summarizer'
+      },
+      body: JSON.stringify({
+        model: selectedModel.id,
+        messages: [
+          { role: 'user', content: promptText }
+        ],
+        max_tokens: config.summaryTargetTokens,
+        temperature: 0.3, // 요약은 보수적으로
+        top_p: 0.8,
+        frequency_penalty: 0.0,
+        presence_penalty: 0.0
+      })
+    });
 
-        const data = await response.json() as any;
-        const summary = data.choices?.[0]?.message?.content;
-
-        if (summary) {
-          return summary.trim();
-        }
-      } finally {
-        clearTimeout(timeoutId);
-      }
-    } catch (error) {
-      console.warn(`⚠️ Summary model ${model.id} error:`, error);
-      continue; // 다음 모델 시도
+    if (!response.ok) {
+      throw new Error(`Summary API error: ${response.status}`);
     }
-  }
 
-  throw new Error('All summary models failed');
+    const data = await response.json() as ChatCompletionResponse;
+
+    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+      throw new Error('Invalid summary response structure');
+    }
+
+    const summaryText = data.choices[0].message.content || '';
+
+    if (!summaryText) {
+      throw new Error('Empty summary received');
+    }
+
+    return summaryText;
+  } catch (error) {
+    console.error('Summary generation error:', error);
+    throw error;
+  }
 }
 
 // 요약과 함께 메시지 구성
@@ -469,18 +421,47 @@ export async function processSummarization(
   apiKey: string,
   config: SummarizationConfig = DEFAULT_SUMMARY_CONFIG
 ): Promise<SummaryResponse> {
+  if (messages.length === 0) {
+    return {
+      summary: '',
+      summarizedMessageCount: 0,
+      remainingMessages: [],
+      totalTokensAfterSummary: 0
+    };
+  }
 
-  const summary = await summarizeConversation(messages, apiKey, config);
+  const { messagesToSummarize, messagesToRetain } = findOptimalRetainMessages(
+    messages,
+    config
+  );
 
-  // 최적의 메시지 분할
-  const { messagesToSummarize, messagesToRetain } = findOptimalRetainMessages(messages, config);
-  const summarizedCount = messagesToSummarize.length;
+  if (messagesToSummarize.length === 0) {
+    return {
+      summary: '',
+      summarizedMessageCount: 0,
+      remainingMessages: messages,
+      totalTokensAfterSummary: estimateTokenCount(messages)
+    };
+  }
+
+  // 요약 생성
+  const summary = await summarizeConversation(
+    messagesToSummarize,
+    apiKey,
+    config
+  );
+
+  // 새로운 토큰 카운트 계산
+  const totalTokensAfterSummary = estimateTokenCount([
+    { role: 'system', content: summary, timestamp: Date.now() },
+    ...messagesToRetain
+  ]);
 
   return {
     summary,
-    summarizedMessageCount: summarizedCount,
+    summarizedMessageCount: messagesToSummarize.length,
     remainingMessages: messagesToRetain,
-    totalTokensAfterSummary: estimateTokenCount(messagesToRetain)
+    totalTokensAfterSummary
   };
 }
 

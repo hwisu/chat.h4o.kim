@@ -31,53 +31,16 @@ async function encryptPassword(password: string, secret: string): Promise<string
 // Advanced decryption function for login tokens
 async function decryptPassword(encrypted: string, secret: string): Promise<string | null> {
   try {
-    const parts = encrypted.split('.');
+    // JWT 라이브러리를 사용하여 검증
+    const payload = jwt.verify(encrypted, secret) as any;
 
-    const [encodedHeader, encodedPayload, signature] = parts;
-
-    // Decode header and payload
-    const header = JSON.parse(atob(encodedHeader.replace(/[-_]/g, (m) => ({'-': '+', '_': '/'}[m] || m))));
-    const payload = JSON.parse(atob(encodedPayload.replace(/[-_]/g, (m) => ({'-': '+', '_': '/'}[m] || m))));
-
-    // Verify algorithm
-    if (header.alg !== "HS256" || header.typ !== "JWT") {
+    // 만료 확인
+    if (Date.now() / 1000 > payload.exp) {
       return null;
     }
 
-    // Check expiration
-    if (Date.now() > payload.exp) {
-      return null;
-    }
-
-    // Verify issuer
+    // 발급자 확인
     if (payload.iss !== "chatty-h4o") {
-      return null;
-    }
-
-    // Recreate the signing key using nonce from payload
-    const key = await crypto.subtle.importKey(
-      'raw',
-      new TextEncoder().encode(secret + payload.nonce.slice(0, 16)),
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['verify']
-    );
-
-    // Verify signature
-    const message = `${encodedHeader}.${encodedPayload}`;
-    const signatureBytes = Uint8Array.from(
-      atob(signature.replace(/[-_]/g, (m) => ({'-': '+', '_': '/'}[m] || m))),
-      c => c.charCodeAt(0)
-    );
-
-    const isValid = await crypto.subtle.verify(
-      'HMAC',
-      key,
-      signatureBytes.buffer,
-      new TextEncoder().encode(message)
-    );
-
-    if (!isValid) {
       return null;
     }
 
@@ -93,7 +56,6 @@ export async function checkAuthenticationOrUserKey(c: any): Promise<boolean> {
   const userApiKey = c.req.header('X-User-API-Key');
 
   if (userApiKey && userApiKey.startsWith('sk-or-v1-')) {
-    // console.log('Access granted with user API key');
     return true;
   }
 
@@ -102,8 +64,7 @@ export async function checkAuthenticationOrUserKey(c: any): Promise<boolean> {
   if (sessionToken) {
     try {
       const jwtSecret = c.env.JWT_SECRET || c.env.OPENROUTER_API_KEY || 'default-secret-key';
-      const payload = jwt.verify(sessionToken, jwtSecret);
-      // console.log('Access granted with session token');
+      jwt.verify(sessionToken, jwtSecret);
       return true;
     } catch (error) {
       console.warn('Invalid session token:', error);
@@ -152,37 +113,27 @@ auth.post('/login', async (c) => {
   }
 });
 
-export async function getAuthStatus(c: any) {
+// 인증 상태 확인 함수
+async function getAuthStatusResponse(c: any) {
   const userApiKey = c.req.header('X-User-API-Key');
-  const sessionToken = c.req.header('X-Session-Token');
+  const hasUserKey = userApiKey && userApiKey.startsWith('sk-or-v1-');
 
-  // console.log('Auth check:', {
-  //   hasUserApiKey: !!userApiKey,
-  //   hasSessionToken: !!sessionToken,
-  //   userApiKeyValid: userApiKey?.startsWith('sk-or-v1-'),
-  //   sessionTokenLength: sessionToken?.length
-  // });
-
-  if (userApiKey && userApiKey.startsWith('sk-or-v1-')) {
+  if (hasUserKey) {
     return {
       authenticated: true,
       auth_method: 'user_api_key',
-      auth_type: 'personal'
+      auth_type: 'Personal API Key'
     };
   }
 
-  if (sessionToken) {
-    try {
-      const jwtSecret = c.env.JWT_SECRET || c.env.OPENROUTER_API_KEY || 'default-secret-key';
-      const payload = jwt.verify(sessionToken, jwtSecret);
-      return {
-        authenticated: true,
-        auth_method: 'session_token',
-        auth_type: 'server'
-      };
-    } catch (error) {
-      console.warn('Session token verification failed:', error);
-    }
+  const isServerAuth = await checkAuthenticationOrUserKey(c);
+
+  if (isServerAuth) {
+    return {
+      authenticated: true,
+      auth_method: 'server_password',
+      auth_type: 'Server Password'
+    };
   }
 
   return {
@@ -193,62 +144,11 @@ export async function getAuthStatus(c: any) {
 }
 
 auth.get('/auth-status', async (c) => {
-  const userApiKey = c.req.header('X-User-API-Key');
-  const hasUserKey = userApiKey && userApiKey.startsWith('sk-or-v1-');
-
-  if (hasUserKey) {
-    return c.json({
-      authenticated: true,
-      auth_method: 'user_api_key',
-      auth_type: 'Personal API Key'
-    });
-  }
-
-  const isServerAuth = await checkAuthenticationOrUserKey(c);
-
-  if (isServerAuth) {
-    return c.json({
-      authenticated: true,
-      auth_method: 'server_password',
-      auth_type: 'Server Password'
-    });
-  }
-
-  return c.json({
-    authenticated: false,
-    auth_method: null,
-    auth_type: null
-  });
+  return c.json(await getAuthStatusResponse(c));
 });
 
 auth.get('/auth/verify', async (c) => {
-  const userApiKey = c.req.header('X-User-API-Key');
-  const hasUserKey = userApiKey && userApiKey.startsWith('sk-or-v1-');
-
-  if (hasUserKey) {
-    return c.json({
-      authenticated: true,
-      auth_method: 'user_api_key',
-      auth_type: 'Personal API Key'
-    });
-  }
-
-  const isServerAuth = await checkAuthenticationOrUserKey(c);
-
-  if (isServerAuth) {
-    return c.json({
-      authenticated: true,
-      auth_method: 'server_password',
-      auth_type: 'Server Password'
-    });
-  }
-
-  return c.json({
-    authenticated: false,
-    auth_method: null,
-    auth_type: null
-  });
+  return c.json(await getAuthStatusResponse(c));
 });
-
 
 export default auth;

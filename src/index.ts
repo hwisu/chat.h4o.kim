@@ -9,8 +9,16 @@ import roles from './routes/roles';
 import context from './routes/context';
 import staticFiles from './routes/static';
 import packageJson from '../package.json';
+import { contextManager } from './services/context-manager';
 
 const app = new Hono<{ Bindings: Env }>();
+
+// DB 초기화 미들웨어 (모든 요청 전에 실행)
+app.use('*', async (c, next) => {
+  // ContextManager에 D1 데이터베이스 연결
+  contextManager.setDatabase(c.env.DB);
+  await next();
+});
 
 // Security headers middleware (applied first)
 app.use('*', securityMiddleware);

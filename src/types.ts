@@ -3,6 +3,7 @@ export interface Env {
   ACCESS_PASSWORD?: string;
   JWT_SECRET?: string;
   ASSETS: Fetcher;
+  DB: D1Database;
 }
 
 // OpenRouter API Types based on official documentation

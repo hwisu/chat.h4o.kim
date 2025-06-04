@@ -18,6 +18,7 @@ class TerminalChat {
         this.isAuthenticated = false;
         this.availableModels = [];
         this.isLoading = false;
+        this.lastUsage = null; // 마지막 요청의 토큰 사용량 저장
 
         this.maxContextSize = 128000; // Will be dynamically set based on selected model
         this.currentTokenUsage = 0; // Current actual token usage (from server)
@@ -614,6 +615,7 @@ class TerminalChat {
 
             // 서버가 컨텍스트를 관리하므로 토큰 사용량만 업데이트
             if (data.usage) {
+                this.lastUsage = data.usage; // 토큰 사용량 저장
                 const totalTokens = data.usage.total_tokens || (data.usage.prompt_tokens + data.usage.completion_tokens);
                 this.currentTokenUsage = totalTokens;
             }
@@ -711,10 +713,10 @@ class TerminalChat {
                                 this.conversationHistory = [];
                                 this.currentTokenUsage = 0;
                                 this.estimatedTokenUsage = 0;
-                                this.output.innerHTML = '';
+                        this.output.innerHTML = '';
                                 this.updateContextDisplay();
-                                this.addSystemMessage('🔄 Chat cleared. How can I help you?');
-                                success = true;
+                        this.addSystemMessage('🔄 Chat cleared. How can I help you?');
+                        success = true;
                             } else {
                                 const errorData = await response.json();
                                 this.addMessage(`❌ Failed to clear context: ${errorData.error}`, 'error');
@@ -1006,6 +1008,19 @@ class TerminalChat {
             <div class="message-header">${header}</div>
             <div class="message-content">${role === 'assistant' ? this.markdownParser.renderContent(content) : this.escapeHtml(content)}</div>
         `;
+
+        // 토큰 사용량 표시 (AI 응답 메시지에만)
+        if (role === 'assistant' && this.lastUsage) {
+            const tokenInfo = document.createElement('div');
+            tokenInfo.className = 'token-usage';
+
+            // 입력 및 출력 토큰 수를 포맷팅
+            const promptTokens = this.formatTokenCount(this.lastUsage.prompt_tokens);
+            const completionTokens = this.formatTokenCount(this.lastUsage.completion_tokens);
+
+            tokenInfo.innerHTML = `<span class="token-prompt">↑ ${promptTokens}</span> <span class="token-completion">↓ ${completionTokens}</span>`;
+            messageDiv.appendChild(tokenInfo);
+        }
 
         this.output.appendChild(messageDiv);
         this.scrollToBottom();
@@ -1507,9 +1522,38 @@ class TerminalChat {
             this.roleTitle.textContent = displayName;
         }
     }
+
+    // 토큰 수 포맷팅 (예: 5000 -> 5k)
+    formatTokenCount(count) {
+        if (!count) return '0';
+
+        if (count >= 1000) {
+            return (count / 1000).toFixed(1) + 'k';
+        }
+
+        return count.toString();
+    }
 }
 
 // Initialize the terminal chat when the page loads
 document.addEventListener('DOMContentLoaded', () => {
     new TerminalChat();
+
+    // 토큰 사용량 표시를 위한 CSS 스타일 추가
+    const style = document.createElement('style');
+    style.textContent = `
+    .token-usage {
+        font-size: 11px;
+        color: #888;
+        margin-top: 5px;
+        text-align: right;
+        opacity: 0.7;
+    }
+
+    .token-prompt, .token-completion {
+        display: inline-block;
+        margin: 0 3px;
+    }
+    `;
+    document.head.appendChild(style);
 });

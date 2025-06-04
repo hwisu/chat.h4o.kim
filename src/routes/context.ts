@@ -32,8 +32,6 @@ context.get('/context', async (c) => {
         conversationHistory: userContext.conversationHistory,
         summary: userContext.summary,
         tokenUsage: userContext.tokenUsage,
-        model: userContext.model,
-        role: userContext.role,
         messageCount: userContext.conversationHistory.length,
         lastActivity: userContext.lastActivity,
         createdAt: userContext.createdAt
