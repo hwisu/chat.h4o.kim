@@ -1,11 +1,34 @@
 import { Hono } from 'hono';
 import { Env, ChatCompletionResponse, OpenRouterModelsResponse, OpenRouterModel } from '../types';
+import { AVAILABLE_ROLES, getRoleById, getRoleSystemPrompt, getPublicRoleInfo } from '../roles';
 
 const chat = new Hono<{ Bindings: Env }>();
 
 // Simple in-memory cache for models (lasts for worker lifetime)
 let modelsCache: { data: any[], timestamp: number, type?: string } | null = null;
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+// Role management - session-based storage
+let userRoles: Map<string, string> = new Map(); // sessionId -> roleId
+
+function getUserRole(sessionId: string): string {
+  return userRoles.get(sessionId) || 'general';
+}
+
+function setUserRole(sessionId: string, roleId: string): void {
+  userRoles.set(sessionId, roleId);
+}
+
+function getSessionId(c: any): string {
+  // Use session token if available
+  const sessionToken = c.req.header('X-Session-Token');
+  if (sessionToken) {
+    return sessionToken;
+  }
+
+  // Fallback to IP address for user API key scenarios
+  return c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For') || 'anonymous';
+}
 
 // Common utility functions
 function getProviderPriority(modelId: string, isUserApiKey: boolean = false): number {
@@ -571,7 +594,7 @@ chat.post('/login', async (c) => {
 chat.get('/help', async (c) => {
   return c.json({
     success: true,
-    response: `📖 Chatty Commands:\n\n🔐 Authentication:\n/login <password>          - Authenticate with server\n\n🔑 API Key Management:\n/set-api-key <key>         - Set your personal OpenRouter API key\n/remove-api-key            - Remove personal API key (use server key)\n/api-key-status            - Check current API key status\n\n🤖 Model Commands:\n/models                    - List available AI models\n/set-model <id>            - Set specific model\n/set-model auto            - Use auto-selection\n\n💬 Chat Commands:\n/clear                     - Clear conversation history\n/help                      - Show this help\n\n💡 Features:\n• Personal API key support (stored locally & encrypted)\n• Conversation context maintained across messages\n• Optimized parameters for better responses\n• Smart token management\n\n🌐 Get your API key: https://openrouter.ai/settings/keys`
+    response: `📖 Chatty Commands:\n\n🔐 Authentication:\n/login <password>          - Authenticate with server\n\n🔑 API Key Management:\n/set-api-key <key>         - Set your personal OpenRouter API key\n/remove-api-key            - Remove personal API key (use server key)\n/api-key-status            - Check current API key status\n\n🎭 Role Management:\n/roles                     - List available AI roles\n/set-role <role-id>        - Set AI personality/role\n\n🤖 Model Commands:\n/models                    - List available AI models\n/set-model <id>            - Set specific model\n/set-model auto            - Use auto-selection\n\n💬 Chat Commands:\n/clear                     - Clear conversation history\n/help                      - Show this help\n\n💡 Features:\n• Personal API key support (stored locally & encrypted)\n• Role-based AI personalities for specialized tasks\n• Conversation context maintained across messages\n• Optimized parameters for better responses\n• Smart token management\n\n🌐 Get your API key: https://openrouter.ai/settings/keys`
   });
 });
 
@@ -633,6 +656,85 @@ chat.get('/auth/verify', async (c) => {
     auth_method: null,
     auth_type: null
   });
+});
+
+// GET /api/roles - 사용 가능한 롤 목록 반환
+chat.get('/roles', async (c) => {
+  // Check authentication first
+  if (!await checkAuthenticationOrUserKey(c)) {
+    return c.json({
+      error: 'Authentication required',
+      auth_required: true
+    }, 401);
+  }
+
+  try {
+    // Return only public information (no system prompts)
+    const publicRoles = AVAILABLE_ROLES.map(role => getPublicRoleInfo(role));
+
+    return c.json({
+      success: true,
+      roles: publicRoles
+    });
+  } catch (error) {
+    console.error('Error fetching roles:', error);
+    return c.json({
+      error: 'Failed to fetch roles',
+      success: false
+    }, 500);
+  }
+});
+
+// POST /api/set-role - 롤 선택 처리
+chat.post('/set-role', async (c) => {
+  // Check authentication first
+  if (!await checkAuthenticationOrUserKey(c)) {
+    return c.json({
+      error: 'Authentication required',
+      auth_required: true
+    }, 401);
+  }
+
+  try {
+    const { role: roleId } = await c.req.json();
+
+    if (!roleId) {
+      return c.json({
+        error: 'Role ID is required',
+        success: false
+      }, 400);
+    }
+
+    // Validate role exists
+    const role = getRoleById(roleId);
+    if (!role) {
+      return c.json({
+        error: `Invalid role: ${roleId}`,
+        success: false
+      }, 400);
+    }
+
+    // Get session identifier
+    const sessionId = getSessionId(c);
+
+    // Store the selected role for this session
+    setUserRole(sessionId, roleId);
+
+    console.log(`🎭 Role set: ${sessionId} -> ${roleId}`);
+
+    return c.json({
+      success: true,
+      role: getPublicRoleInfo(role),
+      message: `Role set to: ${role.name}`
+    });
+
+  } catch (error) {
+    console.error('Error setting role:', error);
+    return c.json({
+      error: 'Failed to set role',
+      success: false
+    }, 500);
+  }
 });
 
 // POST /api/chat - 일반 채팅 (명령어 제외)
@@ -784,8 +886,19 @@ chat.post('/chat', async (c) => {
         }
       }
 
+      // Get current user's selected role and system prompt
+      const sessionId = getSessionId(c);
+      const currentRole = getUserRole(sessionId);
+      const systemPrompt = getRoleSystemPrompt(currentRole);
+
       // Prepare messages with conversation context
       const messages = [];
+
+      // Add system prompt as the first message
+      messages.push({
+        role: 'system',
+        content: systemPrompt
+      });
 
       // Add conversation history
       if (conversationHistory && conversationHistory.length > 0) {
@@ -805,6 +918,7 @@ chat.post('/chat', async (c) => {
         content: message
       });
 
+      console.log(`🎭 Using role: ${currentRole}`);
       console.log(`🤖 Chat request: ${selectedModel}, ${messages.length} messages, ${JSON.stringify(messages).length} chars`);
 
       // Optimized chat request with enhanced parameters

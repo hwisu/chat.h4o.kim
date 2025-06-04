@@ -530,3 +530,166 @@
     font-size: 12px;
     margin-top: 2px;
 }
+
+/* Role-related styles */
+.role-title {
+    font-size: 14px;
+    color: #666;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+    user-select: none;
+    -webkit-user-select: none;
+    line-height: 1.3;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    white-space: normal;
+    text-align: left;
+}
+
+.role-title:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Role selection modal - reuse model modal styles with role prefix */
+.role-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(4px);
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.role-modal.show {
+    display: flex;
+    animation: modal-fade-in 0.2s ease-out;
+}
+
+.role-modal-content {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 500px;
+    max-height: 70vh;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    animation: modal-scale-in 0.2s ease-out;
+}
+
+.role-modal-header {
+    padding: 20px;
+    border-bottom: 1px solid #333;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.role-modal-header h3 {
+    color: #00ff00;
+    font-size: 18px;
+    font-weight: 500;
+    margin: 0;
+}
+
+.role-modal-close {
+    background: none;
+    border: none;
+    color: #666;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+}
+
+.role-modal-close:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.role-list {
+    max-height: 50vh;
+    overflow-y: auto;
+    padding: 10px 0;
+}
+
+.role-list-loading {
+    text-align: center;
+    color: #666;
+    padding: 20px;
+}
+
+.role-item {
+    padding: 12px 20px;
+    color: #fff;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    transition: all 0.2s ease;
+    font-family: inherit;
+    font-size: 14px;
+    /* Enhanced touch support */
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: rgba(0, 255, 0, 0.2);
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    /* Ensure minimum touch target size */
+    min-height: 44px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.role-item:hover,
+.role-item:active {
+    background: rgba(0, 255, 0, 0.1);
+    color: #00ff88;
+}
+
+.role-item.selected {
+    background: rgba(0, 255, 0, 0.2);
+    color: #00ff00;
+    border-left: 3px solid #00ff00;
+}
+
+.role-item:last-child {
+    border-bottom: none;
+}
+
+.role-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.role-icon {
+    margin-right: 8px;
+    font-size: 18px;
+}
+
+.role-name {
+    font-weight: bold;
+    color: #fff;
+    font-size: 14px;
+    line-height: 1.3;
+}
+
+.role-description {
+    font-size: 12px;
+    color: #aaa;
+    line-height: 1.4;
+    margin-top: 4px;
+}

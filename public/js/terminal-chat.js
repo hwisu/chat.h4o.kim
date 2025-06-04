@@ -42,6 +42,14 @@ class TerminalChat {
         // Initialize modules
         this.markdownParser = new MarkdownParser();
 
+        // Role management
+        this.roleManager = new RoleManager();
+        this.selectedRole = this.roleManager.getStoredRole();
+        this.roleModal = document.getElementById('roleModal');
+        this.roleModalClose = document.getElementById('roleModalClose');
+        this.roleTitle = document.getElementById('roleTitle');
+        this.roleList = document.getElementById('roleList');
+
         this.init();
     }
 
@@ -96,11 +104,23 @@ class TerminalChat {
         // Update welcome message based on authentication status
         this.updateWelcomeMessage();
 
-        // Then initialize models
-        await this.initializeModelsBackground();
+        // Then initialize models and roles
+        await Promise.all([
+            this.initializeModelsBackground(),
+            this.initializeRolesBackground()
+        ]);
 
         // Initialize context display
         this.updateContextDisplay();
+    }
+
+    async initializeRolesBackground() {
+        try {
+            await this.roleManager.loadRoles(this.userApiKey, this.sessionToken);
+            this.updateRoleTitle();
+        } catch (error) {
+            console.warn('Background role initialization failed:', error);
+        }
     }
 
     // iOS 18 specific setup
@@ -418,6 +438,56 @@ class TerminalChat {
                 this.hideModelModal();
             }
         });
+
+        // Role title click handler for showing role selection modal
+        const roleTitle = document.getElementById('roleTitle');
+        if (roleTitle) {
+            roleTitle.addEventListener('click', () => {
+                this.showRoleModal();
+            });
+            roleTitle.style.cursor = 'pointer';
+        }
+
+        // Role modal event listeners
+        if (this.roleModalClose) {
+            this.roleModalClose.addEventListener('click', () => {
+                this.hideRoleModal();
+            });
+        }
+
+        if (this.roleModal) {
+            // Enhanced backdrop click handling for mobile
+            const handleBackdropClick = (e) => {
+                if (e.target === this.roleModal) {
+                    this.hideRoleModal();
+                }
+            };
+
+            this.roleModal.addEventListener('click', handleBackdropClick);
+
+            // Add touch support for backdrop
+            if ('ontouchstart' in window) {
+                let touchStartTarget = null;
+
+                this.roleModal.addEventListener('touchstart', (e) => {
+                    touchStartTarget = e.target;
+                }, { passive: true });
+
+                this.roleModal.addEventListener('touchend', (e) => {
+                    if (touchStartTarget === this.roleModal && e.target === this.roleModal) {
+                        this.hideRoleModal();
+                    }
+                    touchStartTarget = null;
+                }, { passive: true });
+            }
+        }
+
+        // ESC key to close role modal
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && this.roleModal && this.roleModal.classList.contains('show')) {
+                this.hideRoleModal();
+            }
+        });
     }
 
     setupSendButtonEvents() {
@@ -704,6 +774,22 @@ class TerminalChat {
 
                     case 'api-key-status':
                         this.showApiKeyStatus();
+                        success = true;
+                        break;
+
+                    case 'roles':
+                        await this.handleRolesCommand();
+                        success = true;
+                        break;
+
+                    case 'set-role':
+                        if (args.length === 0) {
+                            this.addMessage('❌ Role ID required.\n\nUsage: /set-role <role-id>\n\nUse /roles to see available roles', 'error');
+                            break;
+                        }
+
+                        const roleId = args.join(' ');
+                        await this.setRole(roleId);
                         success = true;
                         break;
 
@@ -1380,7 +1466,7 @@ class TerminalChat {
     /**
      * 압축 유틸리티 메서드들
      */
-    compressConversationHistory(history, method = 'field-shortening') {
+    compressConversationHistory(history, method = 'lz-string') {
         if (!history || history.length === 0) {
             return {
                 data: JSON.stringify(history),
@@ -1410,7 +1496,13 @@ class TerminalChat {
         try {
             const startTime = performance.now();
 
-            compressedData = this.compressWithFieldShortening(history);
+            if (method === 'lz-string' && typeof LZString !== 'undefined') {
+                compressedData = this.compressWithLZString(history);
+            } else {
+                // Fallback to field shortening if LZ-String is not available
+                compressedData = this.compressWithFieldShortening(history);
+                method = 'field-shortening';
+            }
 
             const endTime = performance.now();
             const compressedSize = compressedData.length;
@@ -1436,6 +1528,12 @@ class TerminalChat {
                 compressionRatio: 0
             };
         }
+    }
+
+    compressWithLZString(history) {
+        // LZ-String을 사용한 압축
+        const originalData = JSON.stringify(history);
+        return LZString.compressToBase64(originalData);
     }
 
     compressWithFieldShortening(history) {
@@ -1468,6 +1566,9 @@ class TerminalChat {
             let decompressed;
 
             switch (method) {
+                case 'lz-string':
+                    decompressed = this.decompressWithLZString(compressedData);
+                    break;
                 case 'field-shortening':
                     decompressed = this.decompressWithFieldShortening(compressedData);
                     break;
@@ -1475,8 +1576,8 @@ class TerminalChat {
                     decompressed = JSON.parse(compressedData);
             }
 
-            // Handle compressed format
-            if (decompressed.b !== undefined && decompressed.m !== undefined) {
+            // Handle compressed format for field-shortening
+            if (decompressed && decompressed.b !== undefined && decompressed.m !== undefined) {
                 const baseTimestamp = decompressed.b;
                 return decompressed.m.map(msg => ({
                     role: msg.r === 'u' ? 'user' : 'assistant',
@@ -1492,6 +1593,15 @@ class TerminalChat {
         }
     }
 
+    decompressWithLZString(compressedData) {
+        // LZ-String을 사용한 압축 해제
+        if (typeof LZString === 'undefined') {
+            throw new Error('LZString library not available');
+        }
+        const decompressedString = LZString.decompressFromBase64(compressedData);
+        return JSON.parse(decompressedString);
+    }
+
     decompressWithFieldShortening(compressedData) {
         const decompressed = JSON.parse(compressedData);
         const baseTimestamp = decompressed.b;
@@ -1500,6 +1610,132 @@ class TerminalChat {
             content: msg.c,
             timestamp: msg.t + baseTimestamp
         }));
+    }
+
+    async handleRolesCommand() {
+        if (!this.isAuthenticated && !this.userApiKey) {
+            this.addMessage('❌ Authentication required.\n\nUse /login <password> or /set-api-key <key> first.', 'error');
+            return;
+        }
+
+        try {
+            await this.roleManager.loadRoles(this.userApiKey, this.sessionToken);
+
+            if (this.roleManager.availableRoles.length === 0) {
+                this.addMessage('❌ No roles available.', 'error');
+                return;
+            }
+
+            let roleList = `🎭 Available Roles (${this.roleManager.availableRoles.length})\n\n`;
+
+            this.roleManager.availableRoles.forEach((role) => {
+                const current = role.id === this.selectedRole ? ' ← Current' : '';
+                roleList += `${role.icon || '🤖'} ${role.id}${current}\n   ${role.description}\n\n`;
+            });
+
+            roleList += `Usage: /set-role <role-id>`;
+            this.addMessage(roleList, 'system');
+        } catch (error) {
+            console.error('Roles fetch error:', error);
+            this.addMessage(`❌ Error fetching roles: ${error.message}`, 'error');
+        }
+    }
+
+    async setRole(roleId) {
+        const result = await this.roleManager.setRole(roleId, this.userApiKey, this.sessionToken);
+
+        if (result.success) {
+            this.selectedRole = roleId;
+            this.updateRoleTitle();
+            this.addMessage(`✅ Role set to: ${this.roleManager.getRoleDisplayName(roleId)}`, 'system');
+        } else {
+            this.addMessage(`❌ Failed to set role: ${result.error}`, 'error');
+        }
+    }
+
+    showRoleModal() {
+        if (!this.isAuthenticated && !this.userApiKey) {
+            this.addSystemMessage('Please login with /login <password> or set your API key with /set-api-key <key> first to change roles.');
+            return;
+        }
+
+        this.populateRoleList();
+        this.roleModal.classList.add('show');
+    }
+
+    hideRoleModal() {
+        this.roleModal.classList.remove('show');
+    }
+
+    async populateRoleList() {
+        // Show loading state
+        this.roleList.innerHTML = '<div class="role-list-loading">Loading roles...</div>';
+
+        // Load roles if not already loaded
+        if (this.roleManager.availableRoles.length === 0) {
+            await this.roleManager.loadRoles(this.userApiKey, this.sessionToken);
+        }
+
+        // Clear loading and populate list
+        this.roleList.innerHTML = '';
+
+        if (this.roleManager.availableRoles.length === 0) {
+            this.roleList.innerHTML = '<div class="role-list-loading">No roles available</div>';
+            return;
+        }
+
+        this.roleManager.availableRoles.forEach((role) => {
+            const roleItem = document.createElement('div');
+            roleItem.className = 'role-item';
+
+            // Check if this is the currently selected role
+            if (role.id === this.selectedRole) {
+                roleItem.classList.add('selected');
+            }
+
+            roleItem.innerHTML = `
+                <div class="role-header">
+                    <span class="role-icon">${role.icon || '🤖'}</span>
+                    <span class="role-name">${role.name}</span>
+                </div>
+                <div class="role-description">${role.description}</div>
+            `;
+
+            // Add both click and touch events for better mobile support
+            const selectRole = () => {
+                this.setRole(role.id);
+                this.hideRoleModal();
+            };
+
+            roleItem.addEventListener('click', selectRole);
+
+            // Enhanced touch support for mobile
+            if ('ontouchstart' in window) {
+                let touchStartTime = 0;
+
+                roleItem.addEventListener('touchstart', (e) => {
+                    touchStartTime = Date.now();
+                }, { passive: true });
+
+                roleItem.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    const touchDuration = Date.now() - touchStartTime;
+                    if (touchDuration < 500) {
+                        selectRole();
+                    }
+                }, { passive: false });
+            }
+
+            this.roleList.appendChild(roleItem);
+        });
+    }
+
+    updateRoleTitle() {
+        if (this.roleTitle) {
+            const displayName = this.roleManager.formatRoleNameForDisplay(this.selectedRole);
+            this.roleTitle.textContent = displayName;
+            console.log(`🎭 Role title updated: "${displayName}"`);
+        }
     }
 }
 
