@@ -49,13 +49,6 @@ export interface OpenRouterModelsResponse {
 }
 
 // Chat completion types
-export interface ChatMessage {
-  role: 'user' | 'assistant' | 'system' | 'tool';
-  content: string;
-  name?: string;
-  tool_call_id?: string;
-}
-
 export interface Usage {
   prompt_tokens: number;
   completion_tokens: number;
@@ -81,29 +74,4 @@ export interface ChatCompletionResponse {
   object: string;
   usage?: Usage;
   system_fingerprint?: string;
-}
-
-export interface ChatRequest {
-  message: string;
-  model?: string;
-  conversationHistory?: Array<{
-    role: string;
-    content: string;
-    timestamp?: number;
-  }>;
-  temperature?: number;
-  max_tokens?: number;
-  top_p?: number;
-  frequency_penalty?: number;
-  presence_penalty?: number;
-}
-
-export interface ChatResponse {
-  response: string;
-  model: string;
-}
-
-export interface ErrorResponse {
-  error: string;
-  details?: string;
 }

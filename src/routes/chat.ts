@@ -1,12 +1,54 @@
-import { Hono, Context } from 'hono';
-import { Env, ChatRequest, ChatResponse, ChatCompletionResponse, OpenRouterModelsResponse, OpenRouterModel } from '../types';
-import { KOREAN_FRIENDLY_MODELS } from '../constants';
+import { Hono } from 'hono';
+import { Env, ChatCompletionResponse, OpenRouterModelsResponse, OpenRouterModel } from '../types';
 
 const chat = new Hono<{ Bindings: Env }>();
 
 // Simple in-memory cache for models (lasts for worker lifetime)
 let modelsCache: { data: any[], timestamp: number, type?: string } | null = null;
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+// Common utility functions
+function getProviderPriority(modelId: string, isUserApiKey: boolean = false): number {
+  if (isUserApiKey) {
+    // Priority for user API key (premium models first)
+    if (modelId.includes('claude')) return 1;
+    if (modelId.includes('gpt-4')) return 2;
+    if (modelId.includes('meta') || modelId.includes('llama')) return 3;
+    if (modelId.includes('google')) return 4;
+    if (modelId.includes('deepseek')) return 5;
+    if (modelId.includes('gemma')) return 6;
+    return 7; // Other models
+  } else {
+    // Priority for free models
+    if (modelId.includes('meta') || modelId.includes('llama')) return 1;
+    if (modelId.includes('google')) return 2;
+    if (modelId.includes('deepseek')) return 3;
+    if (modelId.includes('gemma')) return 4;
+    return 5; // Other models
+  }
+}
+
+function getContextSize(model: OpenRouterModel): number {
+  // Try to get from model.context_length if available
+  if (model.context_length) return model.context_length;
+
+  // Estimate from model name patterns
+  const modelId = model.id.toLowerCase();
+  if (modelId.includes('128k')) return 128000;
+  if (modelId.includes('32k')) return 32000;
+  if (modelId.includes('16k')) return 16000;
+  if (modelId.includes('8k')) return 8000;
+  if (modelId.includes('4k')) return 4000;
+
+  // Default estimate based on model family
+  if (modelId.includes('llama-3.3') || modelId.includes('llama-3.2')) return 128000;
+  if (modelId.includes('llama-3.1')) return 128000;
+  if (modelId.includes('deepseek')) return 32000;
+  if (modelId.includes('gemini')) return 32000;
+  if (modelId.includes('gemma-2')) return 8000;
+
+  return 4000; // Default
+}
 
 // Helper function to format models response
 function formatModelsResponse(models: OpenRouterModel[]): string {
@@ -65,40 +107,8 @@ function filterFreeModels(models: OpenRouterModel[]): OpenRouterModel[] {
     const aId = a.id.toLowerCase();
     const bId = b.id.toLowerCase();
 
-    // Define provider priority (lower number = higher priority)
-    const getProviderPriority = (modelId: string): number => {
-      if (modelId.includes('meta') || modelId.includes('llama')) return 1;
-      if (modelId.includes('google')) return 2;
-      if (modelId.includes('deepseek')) return 3; // Added deepseek priority
-      if (modelId.includes('gemma')) return 4;
-      return 5; // Other models
-    };
-
-    // Get context size from model context_length or estimate from name
-    const getContextSize = (model: OpenRouterModel): number => {
-      // Try to get from model.context_length if available
-      if (model.context_length) return model.context_length;
-
-      // Estimate from model name patterns
-      const modelId = model.id.toLowerCase();
-      if (modelId.includes('128k')) return 128000;
-      if (modelId.includes('32k')) return 32000;
-      if (modelId.includes('16k')) return 16000;
-      if (modelId.includes('8k')) return 8000;
-      if (modelId.includes('4k')) return 4000;
-
-      // Default estimate based on model family
-      if (modelId.includes('llama-3.3') || modelId.includes('llama-3.2')) return 128000;
-      if (modelId.includes('llama-3.1')) return 128000;
-      if (modelId.includes('deepseek')) return 32000; // Added deepseek default
-      if (modelId.includes('gemini')) return 32000;
-      if (modelId.includes('gemma-2')) return 8000;
-
-      return 4000; // Default
-    };
-
-    const aPriority = getProviderPriority(aId);
-    const bPriority = getProviderPriority(bId);
+    const aPriority = getProviderPriority(aId, false);
+    const bPriority = getProviderPriority(bId, false);
 
     // First sort by provider priority
     if (aPriority !== bPriority) {
@@ -433,19 +443,8 @@ chat.get('/models', async (c) => {
         const aId = a.id.toLowerCase();
         const bId = b.id.toLowerCase();
 
-        // Define provider priority for user API key (lower number = higher priority)
-        const getProviderPriority = (modelId: string): number => {
-          if (modelId.includes('claude')) return 1;
-          if (modelId.includes('gpt-4')) return 2;
-          if (modelId.includes('meta') || modelId.includes('llama')) return 3;
-          if (modelId.includes('google')) return 4;
-          if (modelId.includes('deepseek')) return 5;
-          if (modelId.includes('gemma')) return 6;
-          return 7; // Other models
-        };
-
-        const aPriority = getProviderPriority(aId);
-        const bPriority = getProviderPriority(bId);
+        const aPriority = getProviderPriority(aId, true);
+        const bPriority = getProviderPriority(bId, true);
 
         // First sort by provider priority
         if (aPriority !== bPriority) {
@@ -453,19 +452,6 @@ chat.get('/models', async (c) => {
         }
 
         // Then sort by context size (larger first)
-        const getContextSize = (model: OpenRouterModel): number => {
-          if (model.context_length) return model.context_length;
-
-          const modelId = model.id.toLowerCase();
-          if (modelId.includes('128k')) return 128000;
-          if (modelId.includes('32k')) return 32000;
-          if (modelId.includes('16k')) return 16000;
-          if (modelId.includes('8k')) return 8000;
-          if (modelId.includes('4k')) return 4000;
-
-          return 8000; // Default
-        };
-
         const aContext = getContextSize(a);
         const bContext = getContextSize(b);
         return bContext - aContext;
@@ -700,18 +686,12 @@ chat.post('/chat', async (c) => {
         decompressedData = requestBody;
       }
     } else if (requestBody.h && Array.isArray(requestBody.h)) {
-      // Handle enhanced field shortening compression
-      interface CompressedMessage {
-        r: string;
-        c: string;
-        t: number;
-      }
-
+      // Handle field-shortened compression format
       const baseTimestamp = requestBody.b || 0;
 
       decompressedData = {
-        message: requestBody.m || requestBody.message,
-        conversationHistory: requestBody.h.map((msg: CompressedMessage) => ({
+        message: requestBody.m,
+        conversationHistory: requestBody.h.map((msg: { r: string; c: string; t: number }) => ({
           role: msg.r === 'u' ? 'user' : 'assistant',
           content: msg.c,
           timestamp: msg.t + baseTimestamp
@@ -727,15 +707,9 @@ chat.post('/chat', async (c) => {
       console.log(`📦 Decompressed ${requestBody.h.length} messages from field-shortened format`);
     } else if (requestBody.c) {
       // Handle legacy fallback compression (field name shortening)
-      interface LegacyCompressedMessage {
-        r: string;
-        c: string;
-        t: number;
-      }
-
       decompressedData = {
         message: requestBody.m,
-        conversationHistory: (requestBody.h || []).map((msg: LegacyCompressedMessage) => ({
+        conversationHistory: (requestBody.h || []).map((msg: { r: string; c: string; t: number }) => ({
           role: msg.r,
           content: msg.c,
           timestamp: msg.t

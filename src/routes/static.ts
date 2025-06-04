@@ -3,25 +3,6 @@ import { Env } from '../types';
 
 const staticFiles = new Hono<{ Bindings: Env }>();
 
-// Reuse the same encryption/decryption functions from auth middleware
-function decryptPassword(encrypted: string, secret: string): string | null {
-  try {
-    const decoded = atob(encrypted.replace(/[-_]/g, (m) => ({'-': '+', '_': '/'}[m] || m)));
-    const [password, timestamp, secretCheck] = decoded.split('|');
-
-    // Check if secret matches
-    if (secretCheck !== secret) return null;
-
-    // Check if token is not older than 24 hours
-    const tokenAge = Date.now() - parseInt(timestamp);
-    if (tokenAge > 24 * 60 * 60 * 1000) return null;
-
-    return password;
-  } catch {
-    return null;
-  }
-}
-
 // Helper function to check authentication
 function checkAuth(c: any): boolean {
   const accessPassword = c.env.ACCESS_PASSWORD
@@ -35,11 +16,24 @@ function checkAuth(c: any): boolean {
 
   let providedPassword = queryPassword || headerPassword;
 
-  // If no direct password, try to decrypt cookie
+  // If no direct password, try to decrypt cookie (simple legacy format only)
   if (!providedPassword && encryptedCookie) {
-    const decryptedPassword = decryptPassword(encryptedCookie, encryptionSecret);
-    if (decryptedPassword) {
-      providedPassword = decryptedPassword;
+    try {
+      const decoded = atob(encryptedCookie.replace(/[-_]/g, (m: string) => {
+        const mapping: { [key: string]: string } = { '-': '+', '_': '/' };
+        return mapping[m] || m;
+      }));
+      const [password, timestamp, secretCheck] = decoded.split('|');
+
+      // Check if secret matches and token is not older than 24 hours
+      if (secretCheck === encryptionSecret) {
+        const tokenAge = Date.now() - parseInt(timestamp);
+        if (tokenAge <= 24 * 60 * 60 * 1000) {
+          providedPassword = password;
+        }
+      }
+    } catch {
+      // Ignore decryption errors
     }
   }
 

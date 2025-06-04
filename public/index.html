@@ -70,39 +70,6 @@
                 </div>
             </div>
         </div>
-
-        <!-- Auth modal for password login -->
-        <div class="auth-modal" id="authModal" style="display: none;">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3>Server Login</h3>
-                    <button class="modal-close" onclick="document.getElementById('authModal').style.display='none'">×</button>
-                </div>
-                <div class="modal-body">
-                    <p>Enter the server password to access free AI models:</p>
-                    <input type="password" id="authPassword" placeholder="Password" style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #333; background: #1a1a1a; color: #fff; border-radius: 4px;">
-                    <button onclick="loginWithPassword()" style="width: 100%; padding: 10px; background: #007acc; color: white; border: none; border-radius: 4px; cursor: pointer;">Login</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- API Key modal -->
-        <div class="api-key-modal" id="apiKeyModal" style="display: none;">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3>Personal API Key</h3>
-                    <button class="modal-close" onclick="document.getElementById('apiKeyModal').style.display='none'">×</button>
-                </div>
-                <div class="modal-body">
-                    <p>Enter your OpenRouter API key for full access:</p>
-                    <input type="password" id="apiKey" placeholder="sk-or-v1-..." style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #333; background: #1a1a1a; color: #fff; border-radius: 4px;">
-                    <button onclick="setApiKey()" style="width: 100%; padding: 10px; background: #007acc; color: white; border: none; border-radius: 4px; cursor: pointer;">Set API Key</button>
-                    <p style="font-size: 12px; color: #888; margin-top: 10px;">
-                        Get your API key at: <a href="https://openrouter.ai/settings/keys" target="_blank" style="color: #007acc;">openrouter.ai/settings/keys</a>
-                    </p>
-                </div>
-            </div>
-        </div>
     </div>
 
     <!-- External Libraries -->
@@ -110,12 +77,9 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
     <!-- Highlight.js with comprehensive language support -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-    <!-- LZ-String compression library - optimized for strings/JSON -->
-    <script src="https://unpkg.com/lz-string@1.5.0/libs/lz-string.min.js"></script>
 
     <!-- Application Scripts -->
     <script src="/js/markdown.js"></script>
     <script src="/js/terminal-chat.js"></script>
-    <!-- <script src="/js/pwa.js"></script> -->
 </body>
 </html>

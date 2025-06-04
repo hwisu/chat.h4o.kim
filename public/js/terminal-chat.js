@@ -4,14 +4,8 @@ class TerminalChat {
         this.output = document.getElementById('output');
         this.input = document.getElementById('messageInput');
         this.sendButton = document.getElementById('sendButton');
-        this.modelSelector = document.getElementById('modelSelector');
         this.modelList = document.getElementById('modelList');
         this.contextUsage = document.getElementById('contextUsage');
-        this.authButton = document.getElementById('authButton');
-        this.authModal = document.getElementById('authModal');
-        this.apiKeyModal = document.getElementById('apiKeyModal');
-        this.authPasswordInput = document.getElementById('authPassword');
-        this.apiKeyInput = document.getElementById('apiKey');
         this.statusIndicator = document.getElementById('statusIndicator');
         this.authStatus = document.getElementById('authStatus');
         this.modelModal = document.getElementById('modelModal');
@@ -28,12 +22,6 @@ class TerminalChat {
         this.maxContextSize = 128000; // Will be dynamically set based on selected model
         this.currentTokenUsage = 0; // Current actual token usage (from server)
         this.estimatedTokenUsage = 0; // Estimated usage (client-side)
-
-        // Compression settings for efficient communication
-        this.enableCompression = true;
-        this.compressionMinSize = 500; // Compress messages over 500 bytes
-        this.compressionMethod = 'auto'; // auto, field-shortening, lz-string
-        this.lzStringAvailable = false;
 
         // User API key management
         this.userApiKey = null;
@@ -53,15 +41,6 @@ class TerminalChat {
 
         // Initialize modules
         this.markdownParser = new MarkdownParser();
-
-        // Check compression library availability
-        if (typeof LZString !== 'undefined') {
-            console.log('✅ LZ-String compression library loaded');
-            this.lzStringAvailable = true;
-        } else {
-            console.warn('⚠️ LZ-String library not available, using fallback compression');
-            this.compressionMethod = 'field-shortening';
-        }
 
         this.init();
     }
@@ -523,9 +502,6 @@ class TerminalChat {
         this.showLoading();
 
         try {
-            // Prepare messages for API
-            const messages = this.prepareMessagesForAPI(userInput);
-
             // Compress conversation history if needed
             const compressionResult = this.compressConversationHistory(this.conversationHistory);
 
@@ -1264,20 +1240,6 @@ class TerminalChat {
         }
     }
 
-    async validateApiKey(apiKey) {
-        try {
-            const testResponse = await fetch('https://openrouter.ai/api/v1/models', {
-                headers: {
-                    'Authorization': `Bearer ${apiKey}`,
-                    'Content-Type': 'application/json',
-                }
-            });
-            return testResponse.ok;
-        } catch (error) {
-            return false;
-        }
-    }
-
     // New method to update auth status
     updateAuthStatus() {
         if (this.userApiKey) {
@@ -1415,28 +1377,11 @@ class TerminalChat {
         return Math.ceil(text.length / 3.5);
     }
 
-    // Prepare messages for API call with context
-    prepareMessagesForAPI(userMessage) {
-        // Convert conversation history to OpenRouter format
-        const messages = this.conversationHistory.map(msg => ({
-            role: msg.role,
-            content: msg.content
-        }));
-
-        // Add the new user message
-        messages.push({
-            role: 'user',
-            content: userMessage
-        });
-
-        return messages;
-    }
-
     /**
      * 압축 유틸리티 메서드들
      */
-    compressConversationHistory(history, method = this.compressionMethod) {
-        if (!this.enableCompression || !history || history.length === 0) {
+    compressConversationHistory(history, method = 'field-shortening') {
+        if (!history || history.length === 0) {
             return {
                 data: JSON.stringify(history),
                 method: 'none',
@@ -1450,7 +1395,7 @@ class TerminalChat {
         const originalSize = originalData.length;
 
         // Skip compression for small data
-        if (originalSize < this.compressionMinSize) {
+        if (originalSize < 500) {
             return {
                 data: originalData,
                 method: 'none',
@@ -1461,41 +1406,21 @@ class TerminalChat {
         }
 
         let compressedData;
-        let actualMethod = method;
-
-        // Auto-select compression method based on data size and availability
-        if (method === 'auto') {
-            if (this.lzStringAvailable && history.length > 10) {
-                actualMethod = 'lz-string';
-            } else {
-                actualMethod = 'field-shortening';
-            }
-        }
 
         try {
             const startTime = performance.now();
 
-            switch (actualMethod) {
-                case 'lz-string':
-                    compressedData = this.compressWithLZString(history);
-                    break;
-                case 'field-shortening':
-                    compressedData = this.compressWithFieldShortening(history);
-                    break;
-                default:
-                    compressedData = originalData;
-                    actualMethod = 'none';
-            }
+            compressedData = this.compressWithFieldShortening(history);
 
             const endTime = performance.now();
             const compressedSize = compressedData.length;
             const compressionRatio = ((originalSize - compressedSize) / originalSize) * 100;
 
-            console.log(`📦 Compression: ${actualMethod}, ${originalSize}→${compressedSize} bytes (${compressionRatio.toFixed(1)}% saved, ${(endTime - startTime).toFixed(2)}ms)`);
+            console.log(`📦 Compression: ${method}, ${originalSize}→${compressedSize} bytes (${compressionRatio.toFixed(1)}% saved, ${(endTime - startTime).toFixed(2)}ms)`);
 
             return {
                 data: compressedData,
-                method: actualMethod,
+                method: method,
                 originalSize: originalSize,
                 compressedSize: compressedSize,
                 compressionRatio: compressionRatio,
@@ -1530,12 +1455,6 @@ class TerminalChat {
         });
     }
 
-    compressWithLZString(history) {
-        // 필드명 단축 + LZ-String 조합
-        const fieldCompressed = this.compressWithFieldShortening(history);
-        return LZString.compress(fieldCompressed);
-    }
-
     decompressConversationHistory(compressedData, method) {
         if (!compressedData || method === 'none') {
             try {
@@ -1549,12 +1468,8 @@ class TerminalChat {
             let decompressed;
 
             switch (method) {
-                case 'lz-string':
-                    const lzDecompressed = LZString.decompress(compressedData);
-                    decompressed = JSON.parse(lzDecompressed);
-                    break;
                 case 'field-shortening':
-                    decompressed = JSON.parse(compressedData);
+                    decompressed = this.decompressWithFieldShortening(compressedData);
                     break;
                 default:
                     decompressed = JSON.parse(compressedData);
@@ -1575,6 +1490,16 @@ class TerminalChat {
             console.error('Decompression failed:', error);
             return [];
         }
+    }
+
+    decompressWithFieldShortening(compressedData) {
+        const decompressed = JSON.parse(compressedData);
+        const baseTimestamp = decompressed.b;
+        return decompressed.m.map(msg => ({
+            role: msg.r === 'u' ? 'user' : 'assistant',
+            content: msg.c,
+            timestamp: msg.t + baseTimestamp
+        }));
     }
 }
 
