@@ -302,6 +302,7 @@
     display: inline-block;
 }
 
+/* System message base styles */
 .system-message {
     color: #ffaa00;
     font-style: italic;
@@ -316,9 +317,62 @@
 }
 
 .system-message .message-content {
-    max-width: 100%;
-    display: inline-block;
-    margin-right: auto;
+    background: rgba(255, 170, 0, 0.1) !important;
+    border: 1px solid rgba(255, 170, 0, 0.3) !important;
+    border-radius: 8px !important;
+    padding: 12px 16px !important;
+    max-width: 100% !important;
+    display: inline-block !important;
+    margin-right: auto !important;
+    word-wrap: break-word !important;
+    white-space: pre-wrap !important;
+    line-height: 1.5 !important;
+}
+
+/* Special system message variants */
+.system-message.summary-notice {
+    border-left: 4px solid #f59e0b;
+    margin: 16px 0;
+    animation: slideInLeft 0.3s ease-out;
+}
+
+.system-message.summary-notice .message-content {
+    background: rgba(245, 158, 11, 0.1) !important;
+    border: 1px solid rgba(245, 158, 11, 0.3) !important;
+    color: #fbbf24 !important;
+}
+
+.system-message.token-usage-info {
+    border-left: 4px solid #3b82f6;
+    margin: 8px 0;
+    font-family: 'JetBrains Mono', monospace;
+    animation: slideInLeft 0.3s ease-out;
+}
+
+.system-message.token-usage-info .message-content {
+    background: rgba(59, 130, 246, 0.1) !important;
+    border: 1px solid rgba(59, 130, 246, 0.3) !important;
+    color: #60a5fa !important;
+    font-size: 13px !important;
+    line-height: 1.4 !important;
+}
+
+.system-message.welcome-message .message-content,
+.system-message.auth-required-message .message-content {
+    background: rgba(255, 170, 0, 0.1) !important;
+    border: 1px solid rgba(255, 170, 0, 0.3) !important;
+    color: #ffaa00 !important;
+}
+
+@keyframes slideInLeft {
+    from {
+        transform: translateX(-20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
 }
 
 .error-message {

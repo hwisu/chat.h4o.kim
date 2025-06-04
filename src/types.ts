@@ -1,6 +1,7 @@
 export interface Env {
   OPENROUTER_API_KEY: string;
   ACCESS_PASSWORD?: string;
+  JWT_SECRET?: string;
   ASSETS: Fetcher;
 }
 
@@ -49,6 +50,12 @@ export interface OpenRouterModelsResponse {
 }
 
 // Chat completion types
+export interface ChatMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  timestamp?: number;
+}
+
 export interface Usage {
   prompt_tokens: number;
   completion_tokens: number;

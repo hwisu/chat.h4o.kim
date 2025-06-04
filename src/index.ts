@@ -3,7 +3,12 @@ import { cors } from 'hono/cors';
 import { Env } from './types';
 import { securityMiddleware } from './middleware/security';
 import chat from './routes/chat';
+import auth from './routes/auth';
+import models from './routes/models';
+import roles from './routes/roles';
+import context from './routes/context';
 import staticFiles from './routes/static';
+import packageJson from '../package.json';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -29,12 +34,14 @@ app.use('*', cors({
     // Deny all other origins
     return undefined;
   },
-  allowMethods: ['GET', 'POST', 'OPTIONS'],
+  allowMethods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
   allowHeaders: [
     'Content-Type',
     'Authorization',
     'X-Access-Password',
-    'X-Requested-With'
+    'X-Requested-With',
+    'X-User-API-Key',
+    'X-Session-Token'
   ],
   exposeHeaders: ['X-Total-Count'],
   credentials: true,
@@ -46,12 +53,16 @@ app.get('/health', (c) => {
   return c.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
-    version: '1.0.5'
+    version: packageJson.version
   });
 });
 
 // API routes
-app.route('/api', chat);
+app.route('/api', auth);     // Authentication routes
+app.route('/api', models);   // Model management routes
+app.route('/api', roles);    // Role management routes
+app.route('/api', context);  // Context management routes
+app.route('/api', chat);     // Chat and other routes
 
 // Static file serving (SPA fallback) - must be last
 app.route('*', staticFiles);

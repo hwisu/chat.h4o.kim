@@ -24,17 +24,15 @@ class RoleManager {
 
             if (response.ok) {
                 const data = await response.json();
-                if (data.success && data.roles) {
+                if (data.roles && Array.isArray(data.roles)) {
                     this.availableRoles = data.roles;
-                    console.log(`✅ Loaded ${this.availableRoles.length} roles`);
-                    return true;
                 }
             } else if (response.status === 401) {
                 console.warn('⚠️ Role loading failed: Authentication required');
                 return false;
             }
         } catch (error) {
-            console.error('Failed to load roles:', error);
+            console.warn('Failed to load roles:', error);
         }
         return false;
     }
@@ -59,15 +57,14 @@ class RoleManager {
             if (response.ok) {
                 const data = await response.json();
                 if (data.success) {
-                    this.selectedRole = roleId;
                     this.setStoredRole(roleId);
-                    console.log(`🎭 Role set to: ${roleId}`);
-                    return { success: true, role: data.role };
+                    return { success: true };
+                } else {
+                    return { success: false, error: data.error || 'Failed to set role' };
                 }
+            } else {
+                return { success: false, error: `HTTP ${response.status}` };
             }
-
-            const errorData = await response.json();
-            return { success: false, error: errorData.error || 'Failed to set role' };
         } catch (error) {
             console.error('Error setting role:', error);
             return { success: false, error: error.message };

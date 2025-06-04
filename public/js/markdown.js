@@ -48,25 +48,21 @@ class MarkdownParser {
                         if (language && hljs.getLanguage && hljs.getLanguage(language)) {
                             // Try to highlight with specified language
                             highlighted = hljs.highlight(code, { language }).value;
-                            console.log(`✅ Highlighted ${language} code block`);
                         } else {
                             // Auto-detect language
                             const result = hljs.highlightAuto(code);
                             highlighted = result.value;
-                            console.log(`✅ Auto-highlighted code block (detected: ${result.language || 'unknown'})`);
                         }
                         return `<div class="code-container">
                             <button class="copy-button" onclick="copyCodeToClipboard('${codeId}')">copy</button>
                             <pre class="code-block"><code id="${codeId}" class="hljs${language ? ` language-${language}` : ''}">${highlighted}</code></pre>
                         </div>`;
                     } catch (err) {
-                        console.warn('Highlight.js error:', err);
                         // Silent fallback on error
                     }
                 }
 
                 // Fallback without highlighting
-                console.log('⚠️ Using fallback highlighting');
                 return `<div class="code-container">
                     <button class="copy-button" onclick="copyCodeToClipboard('${codeId}')">copy</button>
                     <pre class="code-block"><code id="${codeId}">${this.escapeHtml(code)}</code></pre>
@@ -188,60 +184,24 @@ class MarkdownParser {
 }
 
 // Global function to copy code block content
-window.copyCodeToClipboard = async function(codeId) {
-    try {
-        const codeElement = document.getElementById(codeId);
-        if (!codeElement) {
-            console.error('Code element not found:', codeId);
-            return;
-        }
-
-        // Get the text content (without HTML tags)
-        const codeText = codeElement.textContent || codeElement.innerText;
-
-        // Try to use the modern clipboard API
-        if (navigator.clipboard && window.isSecureContext) {
-            await navigator.clipboard.writeText(codeText);
-        } else {
-            // Fallback for older browsers
-            const textArea = document.createElement('textarea');
-            textArea.value = codeText;
-            textArea.style.position = 'fixed';
-            textArea.style.left = '-999999px';
-            textArea.style.top = '-999999px';
-            document.body.appendChild(textArea);
-            textArea.focus();
-            textArea.select();
-            document.execCommand('copy');
-            textArea.remove();
-        }
-
-        // Visual feedback
-        const button = document.querySelector(`button[onclick="copyCodeToClipboard('${codeId}')"]`);
-        if (button) {
-            const originalText = button.textContent;
-            button.textContent = 'copied!';
-            button.style.color = '#00ff00';
-            setTimeout(() => {
-                button.textContent = originalText;
-                button.style.color = '';
-            }, 2000);
-        }
-
-        console.log('✅ Code copied to clipboard');
-    } catch (error) {
-        console.error('❌ Failed to copy code:', error);
-
-        // Show error feedback
-        const button = document.querySelector(`button[onclick="copyCodeToClipboard('${codeId}')"]`);
-        if (button) {
-            const originalText = button.textContent;
-            button.textContent = 'error';
-            button.style.color = '#ff4444';
-            setTimeout(() => {
-                button.textContent = originalText;
-                button.style.color = '';
-            }, 2000);
-        }
+function copyCodeToClipboard(codeId) {
+    const codeElement = document.getElementById(codeId);
+    if (codeElement) {
+        const code = codeElement.textContent;
+        navigator.clipboard.writeText(code).then(() => {
+            // Visual feedback
+            const button = codeElement.parentElement.querySelector('.copy-button');
+            if (button) {
+                const originalText = button.textContent;
+                button.textContent = 'copied!';
+                button.classList.add('copied');
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.classList.remove('copied');
+                }, 2000);
+            }
+        }).catch(err => {
+            console.error('Failed to copy code:', err);
+        });
     }
-};
+}

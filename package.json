@@ -1,6 +1,6 @@
 {
   "name": "terminal-openrouter-chat",
-  "version": "1.0.5",
+  "version": "1.0.7",
   "description": "Terminal-style chat interface using OpenRouter free models with Korean language optimization",
   "main": "src/index.ts",
   "scripts": {
@@ -25,7 +25,9 @@
     "wrangler": "^4.17.0"
   },
   "dependencies": {
+    "@types/jsonwebtoken": "^9.0.9",
     "hono": "^4.0.0",
+    "jsonwebtoken": "^9.0.2",
     "lz-string": "^1.5.0"
   }
 }

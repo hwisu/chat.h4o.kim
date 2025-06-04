@@ -226,7 +226,6 @@ class TerminalChat {
                 if (response.status === 401) {
                     // Authentication failed - clear auth state and use cache
                     this.setAuthenticated(false);
-                    console.log('⚠️ Models loading failed: Authentication expired');
                     this.availableModels = this.getStoredModels();
                     return;
                 }
@@ -238,10 +237,6 @@ class TerminalChat {
                             typeof model === 'string' ? model : model.id
                         );
                         this.setStoredModels(this.availableModels);
-
-                        const modelCount = this.availableModels.length;
-                        const keyType = this.userApiKey ? 'personal API key' : 'server key';
-                        console.log(`✅ Fresh models loaded: ${modelCount} models using ${keyType}`);
 
                         this.updateModelTitle();
                         return;
@@ -255,7 +250,6 @@ class TerminalChat {
         // Fallback to cached models if not authenticated or server request failed
         if (this.availableModels.length === 0) {
             this.availableModels = this.getStoredModels();
-            console.log(`📦 Using cached models: ${this.availableModels.length} models`);
         }
     }
 
@@ -282,7 +276,6 @@ class TerminalChat {
                     this.selectedModel = 'auto';
                     localStorage.setItem('selected-model', 'auto');
                     this.updateModelTitle();
-                    console.log('Auto model set in background');
                 }
             }
         } catch (error) {
@@ -572,11 +565,8 @@ class TerminalChat {
         this.showLoading();
 
         try {
-            // Compress conversation history if needed
-            const compressionResult = this.compressConversationHistory(this.conversationHistory);
-
-            // Prepare request data
-            let requestData = {
+            // 단순화된 요청 데이터 - 서버에서 컨텍스트 관리
+            const requestData = {
                 message: userInput,
                 model: this.selectedModel,
                 temperature: 0.7,
@@ -585,23 +575,6 @@ class TerminalChat {
                 frequency_penalty: 0.1,
                 presence_penalty: 0.1
             };
-
-            // Add compression data based on method
-            if (compressionResult.method === 'lz-string') {
-                requestData.compressed = true;
-                requestData.compression_method = 'lz-string';
-                requestData.h = compressionResult.data;
-                requestData.m = userInput;
-            } else if (compressionResult.method === 'field-shortening') {
-                // Use field shortening format
-                requestData.h = JSON.parse(compressionResult.data).m;
-                requestData.b = JSON.parse(compressionResult.data).b;
-            } else {
-                // No compression - only add conversationHistory if it has content
-                if (this.conversationHistory && this.conversationHistory.length > 0) {
-                    requestData.conversationHistory = this.conversationHistory;
-                }
-            }
 
             // Make API request
             const headers = { 'Content-Type': 'application/json' };
@@ -639,22 +612,19 @@ class TerminalChat {
             // Add assistant response to conversation
             this.addMessage(data.response, 'assistant');
 
-            // Update actual token usage if provided by server
+            // 서버가 컨텍스트를 관리하므로 토큰 사용량만 업데이트
             if (data.usage) {
                 const totalTokens = data.usage.total_tokens || (data.usage.prompt_tokens + data.usage.completion_tokens);
                 this.currentTokenUsage = totalTokens;
-
-                // Add assistant message with actual token count
-                this.addToConversationHistory('assistant', data.response, data.usage.completion_tokens);
-
-                console.log(`📊 Token usage: ${data.usage.prompt_tokens} prompt + ${data.usage.completion_tokens} completion = ${totalTokens} total`);
-            } else {
-                // Fallback to estimated tokens
-                this.addToConversationHistory('assistant', data.response);
             }
 
-            // Update context display
+            // 컨텍스트 표시 업데이트 (서버 관리이므로 추정값만 표시)
             this.updateContextDisplay();
+
+            // 요약 적용 알림
+            if (data.summaryApplied && data.summarizedMessageCount > 0) {
+                this.addSystemMessage(`📝 Context optimized: ${data.summarizedMessageCount} messages summarized`, 'summary-applied');
+            }
 
         } catch (error) {
             console.error('Chat error:', error);
@@ -707,16 +677,12 @@ class TerminalChat {
                             // Clear old cached data to force fresh loading after login
                             this.availableModels = [];
                             localStorage.removeItem('cached-models');
-                            console.log('🧹 Cleared model cache after successful login');
 
                             // Update authentication info from server
                             await this.updateAuthenticationInfo();
 
                             // Load models with fresh authentication
                             await this.initializeModelsBackground();
-
-                            // Don't show duplicate welcome message - server response already contains it
-                            // this.updateWelcomeMessage();
 
                             this.addMessage(loginData.response, 'system');
                             success = true;
@@ -726,10 +692,37 @@ class TerminalChat {
                         break;
 
                     case 'clear':
-                        this.clearConversationHistory();
-                        this.output.innerHTML = '';
-                        this.addSystemMessage('🔄 Chat cleared. How can I help you?');
-                        success = true;
+                        try {
+                            const headers = { 'Content-Type': 'application/json' };
+                            if (this.userApiKey) {
+                                headers['X-User-API-Key'] = this.userApiKey;
+                            }
+                            if (this.sessionToken) {
+                                headers['X-Session-Token'] = this.sessionToken;
+                            }
+
+                            const response = await fetch('/api/context/clear', {
+                                method: 'POST',
+                                headers: headers
+                            });
+
+                            if (response.ok) {
+                                // 클라이언트 상태도 초기화
+                                this.conversationHistory = [];
+                                this.currentTokenUsage = 0;
+                                this.estimatedTokenUsage = 0;
+                                this.output.innerHTML = '';
+                                this.updateContextDisplay();
+                                this.addSystemMessage('🔄 Chat cleared. How can I help you?');
+                                success = true;
+                            } else {
+                                const errorData = await response.json();
+                                this.addMessage(`❌ Failed to clear context: ${errorData.error}`, 'error');
+                            }
+                        } catch (error) {
+                            console.error('Clear context error:', error);
+                            this.addMessage(`❌ Error clearing context: ${error.message}`, 'error');
+                        }
                         break;
 
                     case 'help':
@@ -1154,8 +1147,6 @@ class TerminalChat {
                 context_length: modelInfo.context_length
             };
             this.maxContextSize = modelInfo.context_length;
-
-            console.log(`📏 Model context updated: ${modelName} -> ${modelInfo.context_length} tokens`);
         } else {
             // Fallback for models without context info or string-only models
             this.selectedModelInfo = {
@@ -1163,8 +1154,6 @@ class TerminalChat {
                 context_length: this.getDefaultContextSize(modelName)
             };
             this.maxContextSize = this.selectedModelInfo.context_length;
-
-            console.log(`📏 Model context fallback: ${modelName} -> ${this.maxContextSize} tokens (estimated)`);
         }
 
         // Update context display immediately
@@ -1201,46 +1190,13 @@ class TerminalChat {
         return 128000;
     }
 
-    // Calculate actual token usage from conversation history
-    calculateCurrentTokenUsage() {
-        // Calculate estimated tokens for all messages that will be sent to API
-        let totalTokens = 0;
-
-        this.conversationHistory.forEach(msg => {
-            totalTokens += this.estimateTokens(msg.content);
-        });
-
-        this.estimatedTokenUsage = totalTokens;
-
-        // Use actual token usage if available, otherwise fall back to estimated
-        const actualUsage = this.currentTokenUsage || this.estimatedTokenUsage;
-
-        // Auto-trim conversation if it exceeds 80% of model context
-        const contextLimit = this.maxContextSize * 0.8; // Use 80% of available context
-        if (actualUsage > contextLimit && this.conversationHistory.length > 2) {
-            console.log(`🔄 Auto-trimming conversation: ${actualUsage} > ${contextLimit} tokens`);
-
-            // Remove oldest messages until we're under the limit
-            while (this.estimatedTokenUsage > contextLimit && this.conversationHistory.length > 2) {
-                const removed = this.conversationHistory.shift();
-                this.estimatedTokenUsage -= this.estimateTokens(removed.content);
-            }
-
-            console.log(`✂️ Trimmed to ${this.conversationHistory.length} messages, ~${this.estimatedTokenUsage} tokens`);
-        }
-
-        this.updateContextDisplay();
-        return actualUsage;
-    }
-
-    // Update context display with real usage
+    // Update context display (서버에서 실제 관리, 클라이언트는 표시만)
     updateContextDisplay() {
         if (!this.contextUsage) return;
 
-        // Use actual token usage if available, otherwise estimated
-        const displayUsage = this.currentTokenUsage || this.estimatedTokenUsage;
-        const remainingTokens = this.maxContextSize - displayUsage;
-        const usagePercentage = Math.round((displayUsage / this.maxContextSize) * 100);
+        // 서버에서 받은 실제 토큰 사용량 표시 (없으면 기본값)
+        const displayUsage = this.currentTokenUsage || 0;
+        const usagePercentage = this.maxContextSize > 0 ? Math.round((displayUsage / this.maxContextSize) * 100) : 0;
 
         // Format context size display
         let contextSizeDisplay;
@@ -1252,10 +1208,8 @@ class TerminalChat {
             contextSizeDisplay = this.maxContextSize.toString();
         }
 
-        // Show: "Context: 128k (5%)" with indicator for actual vs estimated
-        const usageIndicator = this.currentTokenUsage > 0 ? '' : '~'; // ~ for estimated
-        const displayText = `Context: ${contextSizeDisplay} (${usageIndicator}${usagePercentage}%)`;
-
+        // Show: "Context: 128k (5%)"
+        const displayText = `Context: ${contextSizeDisplay} (${usagePercentage}%)`;
         this.contextUsage.textContent = displayText;
 
         // Update color based on usage
@@ -1267,37 +1221,12 @@ class TerminalChat {
         }
     }
 
-    // Add message to conversation history
-    addToConversationHistory(role, content, actualTokens = null) {
-        const estimatedTokens = this.estimateTokens(content);
-
-        this.conversationHistory.push({
-            role: role,
-            content: content,
-            timestamp: Date.now(),
-            estimatedTokens: estimatedTokens,
-            actualTokens: actualTokens
-        });
-
-        // Update token usage
-        if (actualTokens) {
-            // Recalculate actual usage based on all messages with actual tokens
-            this.currentTokenUsage = this.conversationHistory.reduce((sum, msg) => {
-                return sum + (msg.actualTokens || msg.estimatedTokens || this.estimateTokens(msg.content));
-            }, 0);
-        }
-
-        // Calculate and update current usage
-        this.calculateCurrentTokenUsage();
-    }
-
-    // Clear conversation history
+    // Clear conversation history (클라이언트 상태만 초기화)
     clearConversationHistory() {
         this.conversationHistory = [];
         this.currentTokenUsage = 0;
         this.estimatedTokenUsage = 0;
         this.updateContextDisplay();
-        this.addSystemMessage('🔄 Conversation history cleared.', 'history-cleared');
     }
 
     // User API Key Management Methods
@@ -1376,7 +1305,6 @@ class TerminalChat {
             }
 
             this.modelTitle.textContent = displayName;
-            console.log(`🏷️ Model title updated: "${displayName}" (selected: ${this.selectedModel}, available: ${this.availableModels.length})`);
         }
     }
 
@@ -1433,13 +1361,6 @@ class TerminalChat {
                 this.isAuthenticated = data.authenticated;
                 this.authMethod = data.auth_method;
                 this.authType = data.auth_type;
-
-                console.log('Auth status updated:', {
-                    authenticated: this.isAuthenticated,
-                    method: this.authMethod,
-                    type: this.authType,
-                    hasUserKey: !!this.userApiKey
-                });
             } else {
                 // Server error or not authenticated
                 this.isAuthenticated = false;
@@ -1451,7 +1372,6 @@ class TerminalChat {
             this.isAuthenticated = false;
             this.authMethod = null;
             this.authType = null;
-            console.log('Auth status check failed:', error.message);
         }
 
         this.updateAuthStatus();
@@ -1461,155 +1381,6 @@ class TerminalChat {
     estimateTokens(text) {
         // More accurate token estimation: ~3.5 characters per token on average
         return Math.ceil(text.length / 3.5);
-    }
-
-    /**
-     * 압축 유틸리티 메서드들
-     */
-    compressConversationHistory(history, method = 'lz-string') {
-        if (!history || history.length === 0) {
-            return {
-                data: JSON.stringify(history),
-                method: 'none',
-                originalSize: JSON.stringify(history).length,
-                compressedSize: JSON.stringify(history).length,
-                compressionRatio: 0
-            };
-        }
-
-        const originalData = JSON.stringify(history);
-        const originalSize = originalData.length;
-
-        // Skip compression for small data
-        if (originalSize < 500) {
-            return {
-                data: originalData,
-                method: 'none',
-                originalSize: originalSize,
-                compressedSize: originalSize,
-                compressionRatio: 0
-            };
-        }
-
-        let compressedData;
-
-        try {
-            const startTime = performance.now();
-
-            if (method === 'lz-string' && typeof LZString !== 'undefined') {
-                compressedData = this.compressWithLZString(history);
-            } else {
-                // Fallback to field shortening if LZ-String is not available
-                compressedData = this.compressWithFieldShortening(history);
-                method = 'field-shortening';
-            }
-
-            const endTime = performance.now();
-            const compressedSize = compressedData.length;
-            const compressionRatio = ((originalSize - compressedSize) / originalSize) * 100;
-
-            console.log(`📦 Compression: ${method}, ${originalSize}→${compressedSize} bytes (${compressionRatio.toFixed(1)}% saved, ${(endTime - startTime).toFixed(2)}ms)`);
-
-            return {
-                data: compressedData,
-                method: method,
-                originalSize: originalSize,
-                compressedSize: compressedSize,
-                compressionRatio: compressionRatio,
-                compressionTime: endTime - startTime
-            };
-        } catch (error) {
-            console.warn('Compression failed, using uncompressed data:', error);
-            return {
-                data: originalData,
-                method: 'none',
-                originalSize: originalSize,
-                compressedSize: originalSize,
-                compressionRatio: 0
-            };
-        }
-    }
-
-    compressWithLZString(history) {
-        // LZ-String을 사용한 압축
-        const originalData = JSON.stringify(history);
-        return LZString.compressToBase64(originalData);
-    }
-
-    compressWithFieldShortening(history) {
-        // 필드명 단축 + 적극적 최적화
-        if (history.length === 0) return JSON.stringify([]);
-
-        const baseTimestamp = Math.min(...history.map(msg => msg.timestamp || Date.now()));
-        const compressed = history.map(msg => ({
-            r: msg.role === 'user' ? 'u' : 'a',
-            c: msg.content,
-            t: (msg.timestamp || Date.now()) - baseTimestamp
-        }));
-
-        return JSON.stringify({
-            b: baseTimestamp,
-            m: compressed
-        });
-    }
-
-    decompressConversationHistory(compressedData, method) {
-        if (!compressedData || method === 'none') {
-            try {
-                return JSON.parse(compressedData);
-            } catch {
-                return [];
-            }
-        }
-
-        try {
-            let decompressed;
-
-            switch (method) {
-                case 'lz-string':
-                    decompressed = this.decompressWithLZString(compressedData);
-                    break;
-                case 'field-shortening':
-                    decompressed = this.decompressWithFieldShortening(compressedData);
-                    break;
-                default:
-                    decompressed = JSON.parse(compressedData);
-            }
-
-            // Handle compressed format for field-shortening
-            if (decompressed && decompressed.b !== undefined && decompressed.m !== undefined) {
-                const baseTimestamp = decompressed.b;
-                return decompressed.m.map(msg => ({
-                    role: msg.r === 'u' ? 'user' : 'assistant',
-                    content: msg.c,
-                    timestamp: msg.t + baseTimestamp
-                }));
-            }
-
-            return decompressed;
-        } catch (error) {
-            console.error('Decompression failed:', error);
-            return [];
-        }
-    }
-
-    decompressWithLZString(compressedData) {
-        // LZ-String을 사용한 압축 해제
-        if (typeof LZString === 'undefined') {
-            throw new Error('LZString library not available');
-        }
-        const decompressedString = LZString.decompressFromBase64(compressedData);
-        return JSON.parse(decompressedString);
-    }
-
-    decompressWithFieldShortening(compressedData) {
-        const decompressed = JSON.parse(compressedData);
-        const baseTimestamp = decompressed.b;
-        return decompressed.m.map(msg => ({
-            role: msg.r === 'u' ? 'user' : 'assistant',
-            content: msg.c,
-            timestamp: msg.t + baseTimestamp
-        }));
     }
 
     async handleRolesCommand() {
@@ -1734,7 +1505,6 @@ class TerminalChat {
         if (this.roleTitle) {
             const displayName = this.roleManager.formatRoleNameForDisplay(this.selectedRole);
             this.roleTitle.textContent = displayName;
-            console.log(`🎭 Role title updated: "${displayName}"`);
         }
     }
 }
