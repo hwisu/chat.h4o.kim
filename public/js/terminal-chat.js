@@ -694,7 +694,8 @@ class TerminalChat {
                         break;
 
                     case 'models':
-                        await this.handleModelsCommand();
+                        const filterArg = args.length > 0 ? args.join(' ') : null;
+                        await this.handleModelsCommand(filterArg);
                         success = true;
                         break;
 
@@ -744,7 +745,7 @@ class TerminalChat {
         });
     }
 
-    async handleModelsCommand() {
+    async handleModelsCommand(filterArg = null) {
         if (!this.isAuthenticated && !this.userApiKey) {
             this.addMessage('❌ Authentication required.\n\nUse /login <password> or /set-api-key <key> first.', 'error');
             return;
@@ -767,12 +768,35 @@ class TerminalChat {
             if (response.ok) {
                 const data = await response.json();
                 if (data.models && Array.isArray(data.models)) {
-                    let modelList = `📋 Available Models (${data.models.length} total)\n\n`;
-                    data.models.forEach((model, index) => {
+                    // Filter models if filter argument is provided
+                    let filteredModels = data.models;
+                    if (filterArg) {
+                        filteredModels = data.models.filter(model => {
+                            const modelId = typeof model === 'string' ? model : model.id;
+                            return modelId.toLowerCase().includes(filterArg.toLowerCase());
+                        });
+                    }
+
+                    if (filteredModels.length === 0) {
+                        const filterMessage = filterArg ? ` matching "${filterArg}"` : '';
+                        this.addMessage(`❌ No models found${filterMessage}.`, 'error');
+                        return;
+                    }
+
+                    // Build model list
+                    const filterMessage = filterArg ? ` matching "${filterArg}"` : '';
+                    let modelList = `📋 Available Models${filterMessage} (${filteredModels.length}/${data.models.length} total)\n\n`;
+
+                    filteredModels.forEach((model, index) => {
                         const modelId = typeof model === 'string' ? model : model.id;
                         modelList += `${index + 1}. ${modelId}\n`;
                     });
+
                     modelList += `\nUsage: /set-model <model-id> or /set-model auto`;
+                    if (filterArg) {
+                        modelList += `\n💡 Use /models without filter to see all models`;
+                    }
+
                     this.addMessage(modelList, 'system');
                 } else {
                     this.addMessage('❌ No models available.', 'error');
@@ -821,8 +845,6 @@ class TerminalChat {
 
             // Update welcome message to show API key usage
             this.updateWelcomeMessage();
-
-            this.addMessage('✅ Personal API key set!\n\n🔑 Using your OpenRouter account\n💡 Commands: /models, /set-model <id>', 'system');
 
             // Load models with new key
             await this.loadModelsBackground();

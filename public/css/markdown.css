@@ -1,15 +1,49 @@
 /* Markdown rendering styles */
+.message-content .code-container {
+    position: relative;
+    margin: 8px 0;
+}
+
+.message-content .copy-button {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    background: rgba(0, 0, 0, 0.7);
+    color: #ccc;
+    border: 1px solid #444;
+    border-radius: 3px;
+    padding: 4px 8px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', 'Courier New', monospace;
+    cursor: pointer;
+    z-index: 10;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(4px);
+    text-transform: lowercase;
+}
+
+.message-content .copy-button:hover {
+    background: rgba(0, 0, 0, 0.9);
+    color: #00ff88;
+    border-color: #00ff88;
+    transform: scale(1.05);
+}
+
+.message-content .copy-button:active {
+    transform: scale(0.95);
+}
+
 .message-content pre.code-block {
     background: #1a1a1a;
     border: 1px solid #333;
     border-radius: 4px;
     padding: 12px;
-    margin: 8px 0;
+    margin: 0; /* Remove margin since it's now handled by .code-container */
     overflow-x: auto;
     font-family: 'JetBrains Mono', 'Courier New', monospace;
     font-size: 14px;
     line-height: 1.4;
-    
+
     /* Enable word wrapping for long lines */
     white-space: pre-wrap;
     word-wrap: break-word;

@@ -3,7 +3,7 @@ class MarkdownParser {
     constructor() {
         this.hljsReady = false;
         this.markedReady = false;
-        
+
         // Wait for libraries to load
         this.initializeWhenReady();
     }
@@ -12,7 +12,7 @@ class MarkdownParser {
         // Wait for libraries to be available
         let attempts = 0;
         const maxAttempts = 50; // 5 seconds max wait
-        
+
         while (attempts < maxAttempts) {
             if (typeof marked !== 'undefined' && typeof hljs !== 'undefined') {
                 this.setupLibraries();
@@ -21,7 +21,7 @@ class MarkdownParser {
             await new Promise(resolve => setTimeout(resolve, 100));
             attempts++;
         }
-        
+
         if (attempts >= maxAttempts) {
             // Fallback without libraries
             this.setupFallback();
@@ -36,9 +36,12 @@ class MarkdownParser {
         if (typeof marked !== 'undefined') {
             // Configure marked with custom renderer for code highlighting
             const renderer = new marked.Renderer();
-            
+
             // Custom code block renderer with syntax highlighting
             renderer.code = (code, language) => {
+                // Generate unique ID for each code block
+                const codeId = 'code-' + Math.random().toString(36).substr(2, 9);
+
                 if (this.hljsReady && typeof hljs !== 'undefined') {
                     try {
                         let highlighted;
@@ -52,16 +55,22 @@ class MarkdownParser {
                             highlighted = result.value;
                             console.log(`✅ Auto-highlighted code block (detected: ${result.language || 'unknown'})`);
                         }
-                        return `<pre class="code-block"><code class="hljs${language ? ` language-${language}` : ''}">${highlighted}</code></pre>`;
+                        return `<div class="code-container">
+                            <button class="copy-button" onclick="copyCodeToClipboard('${codeId}')">copy</button>
+                            <pre class="code-block"><code id="${codeId}" class="hljs${language ? ` language-${language}` : ''}">${highlighted}</code></pre>
+                        </div>`;
                     } catch (err) {
                         console.warn('Highlight.js error:', err);
                         // Silent fallback on error
                     }
                 }
-                
+
                 // Fallback without highlighting
                 console.log('⚠️ Using fallback highlighting');
-                return `<pre class="code-block"><code>${this.escapeHtml(code)}</code></pre>`;
+                return `<div class="code-container">
+                    <button class="copy-button" onclick="copyCodeToClipboard('${codeId}')">copy</button>
+                    <pre class="code-block"><code id="${codeId}">${this.escapeHtml(code)}</code></pre>
+                </div>`;
             };
 
             // Custom inline code renderer
@@ -96,16 +105,16 @@ class MarkdownParser {
     parse(content) {
         if (typeof marked !== 'undefined') {
             const parsed = marked.parse(content);
-            
+
             // Apply syntax highlighting to any code blocks that weren't caught by the renderer
             if (typeof hljs !== 'undefined') {
                 // Create a temporary div to work with the parsed HTML
                 const tempDiv = document.createElement('div');
                 tempDiv.innerHTML = parsed;
-                
+
                 // Find and highlight any remaining code blocks
                 const codeBlocks = tempDiv.querySelectorAll('pre code:not(.hljs)');
-                
+
                 codeBlocks.forEach((block) => {
                     try {
                         hljs.highlightElement(block);
@@ -113,10 +122,10 @@ class MarkdownParser {
                         // Silent fallback on error
                     }
                 });
-                
+
                 return tempDiv.innerHTML;
             }
-            
+
             return parsed;
         } else {
             // Fallback to basic parsing if marked is not available
@@ -177,3 +186,62 @@ class MarkdownParser {
         }
     }
 }
+
+// Global function to copy code block content
+window.copyCodeToClipboard = async function(codeId) {
+    try {
+        const codeElement = document.getElementById(codeId);
+        if (!codeElement) {
+            console.error('Code element not found:', codeId);
+            return;
+        }
+
+        // Get the text content (without HTML tags)
+        const codeText = codeElement.textContent || codeElement.innerText;
+
+        // Try to use the modern clipboard API
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(codeText);
+        } else {
+            // Fallback for older browsers
+            const textArea = document.createElement('textarea');
+            textArea.value = codeText;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-999999px';
+            textArea.style.top = '-999999px';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            document.execCommand('copy');
+            textArea.remove();
+        }
+
+        // Visual feedback
+        const button = document.querySelector(`button[onclick="copyCodeToClipboard('${codeId}')"]`);
+        if (button) {
+            const originalText = button.textContent;
+            button.textContent = 'copied!';
+            button.style.color = '#00ff00';
+            setTimeout(() => {
+                button.textContent = originalText;
+                button.style.color = '';
+            }, 2000);
+        }
+
+        console.log('✅ Code copied to clipboard');
+    } catch (error) {
+        console.error('❌ Failed to copy code:', error);
+
+        // Show error feedback
+        const button = document.querySelector(`button[onclick="copyCodeToClipboard('${codeId}')"]`);
+        if (button) {
+            const originalText = button.textContent;
+            button.textContent = 'error';
+            button.style.color = '#ff4444';
+            setTimeout(() => {
+                button.textContent = originalText;
+                button.style.color = '';
+            }, 2000);
+        }
+    }
+};
