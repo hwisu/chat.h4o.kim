@@ -20,8 +20,6 @@ class ContextManager {
   private cleanupIntervalMs = 30 * 60 * 1000; // 30분
 
   constructor() {
-    // Cloudflare Workers에서는 전역 스코프에서 setInterval 불가
-    // 대신 요청마다 필요시 정리하는 방식 사용
   }
 
   // 사용자 ID 생성 (sessionToken 또는 userApiKey 해시)

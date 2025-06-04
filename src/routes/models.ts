@@ -65,67 +65,39 @@ function formatModelsResponse(models: OpenRouterModel[]): string {
 
 // Shared function to filter and process models
 export function filterFreeModels(models: OpenRouterModel[]): OpenRouterModel[] {
-  let freeModels = models.filter((m: OpenRouterModel) =>
-    m.id.endsWith(':free')
-  );
+  return models
+    .filter((m: OpenRouterModel) =>
+      // 무료 모델만 선택
+      m.id.endsWith(':free') &&
+      // 작은 모델 제외 (mini, micro, small 키워드 포함)
+      !m.id.toLowerCase().match(/mini|micro|small/) &&
+      // 8B 이상 모델만 선택 (또는 크기를 알 수 없는 모델)
+      (!m.id.toLowerCase().match(/(\d+(?:\.\d+)?)b/) ||
+        parseFloat(m.id.toLowerCase().match(/(\d+(?:\.\d+)?)b/)?.[1] || '8') >= 8)
+    )
+    .sort((a, b) => {
+      const aId = a.id.toLowerCase();
+      const bId = b.id.toLowerCase();
 
-  console.log(`\n=== DEBUG: All Free Models (${freeModels.length}) ===`);
-  freeModels.forEach((model, index) => {
-    console.log(`${index + 1}. ${model.id}`);
-  });
+      // 공급자 우선순위로 정렬
+      const aPriority = getProviderPriority(aId, false);
+      const bPriority = getProviderPriority(bId, false);
 
-  // Filter out models with smaller than 8b parameter counts (keep 8b and larger)
-  freeModels = freeModels.filter((m: OpenRouterModel) => {
-    const modelId = m.id.toLowerCase();
+      if (aPriority !== bPriority) {
+        return aPriority - bPriority;
+      }
 
-    // Check for parameter size patterns
-    const sizeMatch = modelId.match(/(\d+(?:\.\d+)?)b/);
-    if (sizeMatch) {
-      const size = parseFloat(sizeMatch[1]);
-      const keep = size >= 8; // Keep models 8b and larger (changed from > 8)
-      console.log(`Size check - ${m.id}: ${size}b -> ${keep ? 'KEEP' : 'FILTER'}`);
-      return keep;
-    }
+      // 컨텍스트 크기로 정렬 (큰 것 우선)
+      const aContext = getContextSize(a);
+      const bContext = getContextSize(b);
 
-    // Filter out known small models
-    if (modelId.includes('mini') || modelId.includes('micro') || modelId.includes('small')) {
-      console.log(`Small model check - ${m.id}: FILTER (contains mini/micro/small)`);
-      return false;
-    }
+      if (aContext !== bContext) {
+        return bContext - aContext;
+      }
 
-    // If no size found, keep the model (assume it might be large)
-    console.log(`No size found - ${m.id}: KEEP (assume large)`);
-    return true;
-  });
-
-  console.log(`\n=== DEBUG: Filtered Models (${freeModels.length}) ===`);
-  freeModels.forEach((model, index) => {
-    console.log(`${index + 1}. ${model.id}`);
-  });
-
-  // Sort models by provider priority: meta > google > deepseek > gemma, then by context size
-  return freeModels.sort((a, b) => {
-    const aId = a.id.toLowerCase();
-    const bId = b.id.toLowerCase();
-
-    const aPriority = getProviderPriority(aId, false);
-    const bPriority = getProviderPriority(bId, false);
-
-    // First sort by provider priority
-    if (aPriority !== bPriority) {
-      return aPriority - bPriority;
-    }
-
-    // Then sort by context size (larger first)
-    const aContext = getContextSize(a);
-    const bContext = getContextSize(b);
-    if (aContext !== bContext) {
-      return bContext - aContext;
-    }
-
-    // Finally sort alphabetically
-    return a.id.localeCompare(b.id);
-  });
+      // 알파벳 순
+      return a.id.localeCompare(b.id);
+    });
 }
 
 // Helper function to get API key (user key takes priority) - export for use in other modules
@@ -157,39 +129,59 @@ export function getSelectedModelFromCookie(c: any): string | null {
 }
 
 // Auto-select best available model
-export async function autoSelectModel(c: any, apiKey: string): Promise<string> {
+export async function autoSelectModel(c: any, apiKey: string, skipLog?: boolean): Promise<string> {
   try {
     // Check cache first for auto-selection
     let freeModels: OpenRouterModel[] = [];
 
     if (modelsCache && Date.now() - modelsCache.timestamp < CACHE_DURATION) {
-      // console.log('Using cached models for auto-selection');
       freeModels = modelsCache.data;
     } else {
-      // Fetch fresh models if cache is stale
-      const modelsResponse = await fetch('https://openrouter.ai/api/v1/models', {
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-      });
+      // 캐시 타임아웃 설정으로 빠른 응답 보장
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3초 타임아웃
 
-      if (modelsResponse.ok) {
-        const modelsData: OpenRouterModelsResponse = await modelsResponse.json();
-        freeModels = filterFreeModels(modelsData.data);
+      try {
+        const modelsResponse = await fetch('https://openrouter.ai/api/v1/models', {
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          signal: controller.signal,
+          cf: {
+            cacheTtl: 300,
+            cacheEverything: true
+          }
+        });
 
-        // Update cache
-        modelsCache = {
-          data: freeModels,
-          timestamp: Date.now()
-        };
+        clearTimeout(timeoutId);
+
+        if (modelsResponse.ok) {
+          const modelsData: OpenRouterModelsResponse = await modelsResponse.json();
+          freeModels = filterFreeModels(modelsData.data);
+
+          // Update cache
+          modelsCache = {
+            data: freeModels,
+            timestamp: Date.now(),
+            type: 'server' // 기본 서버 타입으로 설정
+          };
+        }
+      } catch (error: any) {
+        if (error.name !== 'AbortError') {
+          console.warn('Models fetch failed:', error);
+        }
+      } finally {
+        clearTimeout(timeoutId);
       }
     }
 
     if (freeModels.length > 0) {
-      // Models are already sorted by priority: meta > google > gemma, then by context size
+      // Models are already sorted by priority
       const selectedModel = freeModels[0].id;
-      // console.log(`🎯 Auto-selected model: ${selectedModel}`);
+      if (!skipLog) {
+        console.log(`🎯 Auto-selected model: ${selectedModel}`);
+      }
       return selectedModel;
     }
   } catch (error) {
@@ -201,7 +193,7 @@ export async function autoSelectModel(c: any, apiKey: string): Promise<string> {
 }
 
 // Get selected model with auto-selection support
-export async function getSelectedModel(c: any, requestedModel?: string): Promise<string> {
+export async function getSelectedModel(c: any, requestedModel?: string, skipLog?: boolean): Promise<string> {
   const apiKey = getApiKey(c);
   const selectedModelCookie = getSelectedModelFromCookie(c);
 
@@ -209,7 +201,7 @@ export async function getSelectedModel(c: any, requestedModel?: string): Promise
 
   // Auto-select if model is 'auto' or no specific model set
   if (selectedModel === 'auto' || (!selectedModelCookie && !requestedModel)) {
-    selectedModel = await autoSelectModel(c, apiKey);
+    selectedModel = await autoSelectModel(c, apiKey, skipLog);
   }
 
   return selectedModel;
@@ -232,7 +224,6 @@ models.get('/models', async (c) => {
     // Check cache first - separate cache for user vs server keys
     const cacheKey = hasUserApiKey ? 'user' : 'server';
     if (modelsCache && modelsCache.type === cacheKey && Date.now() - modelsCache.timestamp < CACHE_DURATION) {
-      // console.log(`Using cached models data for ${cacheKey}`);
       return c.json({
         success: true,
         models: modelsCache.data,
@@ -241,71 +232,96 @@ models.get('/models', async (c) => {
       });
     }
 
-    const modelsResponse = await fetch('https://openrouter.ai/api/v1/models', {
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      // Cloudflare optimizations
-      cf: {
-        cacheTtl: 300, // Cache for 5 minutes
-        cacheEverything: true
-      }
-    });
+    // 타임아웃 설정으로 빠른 응답 보장
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000); // 3초 타임아웃
 
-    if (!modelsResponse.ok) {
-      if (modelsResponse.status === 401) {
-        return c.json({
-          error: 'Invalid API key. Please check your OpenRouter API key.',
-          auth_required: true
-        }, 401);
-      }
-      return c.json({ error: 'Failed to fetch models' }, 500);
-    }
-
-    const modelsData: OpenRouterModelsResponse = await modelsResponse.json();
-
-    // Process models - if user has their own API key, show all models
-    // If using server key, only show free models
-    let processedModels: OpenRouterModel[];
-    if (hasUserApiKey) {
-      // User API key: show all models, sorted by priority
-      processedModels = modelsData.data.sort((a, b) => {
-        const aId = a.id.toLowerCase();
-        const bId = b.id.toLowerCase();
-
-        const aPriority = getProviderPriority(aId, true);
-        const bPriority = getProviderPriority(bId, true);
-
-        // First sort by provider priority
-        if (aPriority !== bPriority) {
-          return aPriority - bPriority;
+    try {
+      const modelsResponse = await fetch('https://openrouter.ai/api/v1/models', {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal,
+        cf: {
+          cacheTtl: 300,
+          cacheEverything: true
         }
-
-        // Then sort by context size (larger first)
-        const aContext = getContextSize(a);
-        const bContext = getContextSize(b);
-        return bContext - aContext;
       });
-    } else {
-      // Server API key: only free models
-      processedModels = filterFreeModels(modelsData.data);
+
+      clearTimeout(timeoutId);
+
+      if (!modelsResponse.ok) {
+        if (modelsResponse.status === 401) {
+          return c.json({
+            error: 'Invalid API key. Please check your OpenRouter API key.',
+            auth_required: true
+          }, 401);
+        }
+        return c.json({ error: 'Failed to fetch models' }, 500);
+      }
+
+      const modelsData: OpenRouterModelsResponse = await modelsResponse.json();
+
+      // Process models - if user has their own API key, show all models
+      // If using server key, only show free models
+      let processedModels: OpenRouterModel[];
+      if (hasUserApiKey) {
+        // User API key: show all models, sorted by priority
+        processedModels = modelsData.data.sort((a, b) => {
+          const aId = a.id.toLowerCase();
+          const bId = b.id.toLowerCase();
+
+          const aPriority = getProviderPriority(aId, true);
+          const bPriority = getProviderPriority(bId, true);
+
+          // First sort by provider priority
+          if (aPriority !== bPriority) {
+            return aPriority - bPriority;
+          }
+
+          // Then sort by context size (larger first)
+          const aContext = getContextSize(a);
+          const bContext = getContextSize(b);
+          return bContext - aContext;
+        });
+      } else {
+        // Server API key: only free models
+        processedModels = filterFreeModels(modelsData.data);
+      }
+
+      // Update cache with type info
+      modelsCache = {
+        data: processedModels,
+        timestamp: Date.now(),
+        type: cacheKey
+      };
+
+      return c.json({
+        success: true,
+        models: processedModels,
+        response: formatModelsResponse(processedModels),
+        cached: false,
+        user_api_key: hasUserApiKey
+      });
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        // 타임아웃 발생 시 캐시된 데이터 있으면 사용
+        if (modelsCache) {
+          return c.json({
+            success: true,
+            models: modelsCache.data,
+            response: formatModelsResponse(modelsCache.data),
+            cached: true,
+            user_api_key: hasUserApiKey
+          });
+        }
+      }
+
+      throw error; // 다른 에러는 아래에서 처리
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    // Update cache with type info
-    modelsCache = {
-      data: processedModels,
-      timestamp: Date.now(),
-      type: cacheKey
-    };
-
-    return c.json({
-      success: true,
-      models: processedModels,
-      response: formatModelsResponse(processedModels),
-      cached: false,
-      user_api_key: hasUserApiKey
-    });
   } catch (error) {
     console.error('Error fetching models:', error);
     return c.json({

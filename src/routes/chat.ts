@@ -143,7 +143,7 @@ chat.post('/chat', async (c) => {
 
       // API 키 및 모델 설정
       const apiKey = getApiKey(c);
-      const selectedModel = await getSelectedModel(c, model || context.model);
+      const selectedModel = await getSelectedModel(c, model || context.model, true);
       const systemPrompt = getRoleSystemPrompt(currentRole);
 
       // 사용자 메시지를 컨텍스트에 추가
