@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { rolesStore } from '../stores.js';
-  import { apiClient } from '../services/api.js';
-  import { updateRoles, setError } from '../stores.js';
+  import { rolesState } from '../stores/roles.svelte';
+import { apiClient } from '../services/api.js';
+import { updateRoles } from '../stores/roles.svelte';
+import { setError } from '../stores/ui.svelte';
 
   // Svelte 5 props 시스템 사용
   let { onClose, onSelect } = $props();
@@ -26,7 +27,7 @@
       
       if (result.success) {
         // 선택된 롤 정보 업데이트
-        const selectedRole = $rolesStore.available.find(r => r.id === roleId);
+        const selectedRole = rolesState.available.find(r => r.id === roleId);
         if (selectedRole) {
           updateRoles({
             selected: roleId,
@@ -87,19 +88,19 @@
     </div>
 
     <div class="role-list">
-      {#if $rolesStore.isLoading}
+      {#if rolesState.isLoading}
         <div class="role-list-loading">
           <div class="loading-spinner"></div>
           Loading roles...
         </div>
-      {:else if $rolesStore.available.length === 0}
+      {:else if rolesState.available.length === 0}
         <div class="role-list-empty">
           No roles available. Please check your authentication.
         </div>
       {:else}
-        {#each $rolesStore.available as role}
+        {#each rolesState.available as role}
           <button 
-            class="role-list-item {role.id === $rolesStore.selected ? 'selected' : ''}"
+            class="role-list-item {role.id === rolesState.selected ? 'selected' : ''}"
             onclick={() => selectRole(role.id)}
             disabled={isLoading}
             aria-label="Select {formatRoleName(role)}"
@@ -112,7 +113,7 @@
                 </div>
               {/if}
             </div>
-            {#if role.id === $rolesStore.selected}
+            {#if role.id === rolesState.selected}
               <span class="role-selected-indicator">✓</span>
             {/if}
           </button>

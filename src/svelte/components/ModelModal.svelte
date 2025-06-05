@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { modelsStore } from '../stores.js';
-  import { apiClient } from '../services/api.js';
-  import { updateModels, setError } from '../stores.js';
+  import { modelsState } from '../stores/models.svelte';
+import { updateModels } from '../stores/models.svelte';
+import { apiClient } from '../services/api.js';
+import { setError } from '../stores/ui.svelte';
 
   // Svelte 5 props 시스템 사용
   let { onClose, onSelect } = $props();
@@ -26,7 +27,7 @@
       
       if (result.success) {
         // 선택된 모델 정보 업데이트
-        const selectedModel = $modelsStore.available.find(m => m.id === modelId);
+        const selectedModel = modelsState.available.find(m => m.id === modelId);
         if (selectedModel) {
           updateModels({
             selected: modelId,
@@ -95,19 +96,19 @@
     </div>
 
     <div class="model-list">
-      {#if $modelsStore.isLoading}
+      {#if modelsState.isLoading}
         <div class="model-list-loading">
           <div class="loading-spinner"></div>
           Loading models...
         </div>
-      {:else if $modelsStore.available.length === 0}
+      {:else if modelsState.available.length === 0}
         <div class="model-list-empty">
           No models available. Please check your authentication.
         </div>
       {:else}
-        {#each $modelsStore.available as model}
+        {#each modelsState.available as model}
           <button 
-            class="model-list-item {model.id === $modelsStore.selected ? 'selected' : ''}"
+            class="model-list-item {model.id === modelsState.selected ? 'selected' : ''}"
             onclick={() => selectModel(model.id)}
             disabled={isLoading}
             aria-label="Select {formatModelName(model)}"
@@ -128,7 +129,7 @@
                 {/if}
               </div>
             </div>
-            {#if model.id === $modelsStore.selected}
+            {#if model.id === modelsState.selected}
               <span class="model-selected-indicator">✓</span>
             {/if}
           </button>

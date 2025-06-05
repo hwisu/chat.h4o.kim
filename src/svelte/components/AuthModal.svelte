@@ -1,6 +1,6 @@
 <script lang="ts">
   import { loginUser, setUserApiKey } from '../services/app.js';
-  import { setError, clearError } from '../stores.js';
+  import { setError, clearError } from '../stores/ui.svelte';
 
   // Svelte 5 props 시스템 사용
   let { onClose, onSuccess } = $props();

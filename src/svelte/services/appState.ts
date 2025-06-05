@@ -1,9 +1,6 @@
 import { initializeApp } from './app';
-import { 
-  authState, 
-  setError, 
-  clearError
-} from '../stores';
+import { authState } from '../stores/auth.svelte';
+import { setError, clearError } from '../stores/ui.svelte';
 import type { AuthState } from '../stores/auth.svelte';
 
 interface ModalState {

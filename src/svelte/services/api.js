@@ -25,11 +25,11 @@ class ApiClient {
     }
 
     // 디버깅용 로그
-    console.log('API Headers:', {
-      hasUserApiKey: !!this.userApiKey,
-      hasSessionToken: !!this.sessionToken,
-      sessionToken: this.sessionToken ? 'exists' : 'missing'
-    });
+    // console.log('API Headers:', {
+    //   hasUserApiKey: !!this.userApiKey,
+    //   hasSessionToken: !!this.sessionToken,
+    //   sessionToken: this.sessionToken ? 'exists' : 'missing'
+    // }); // API 요청마다 출력되는 빈번한 로그 제거
 
     return headers;
   }
@@ -81,10 +81,10 @@ class ApiClient {
         sessionStorage.setItem('session_token', data.session_token);
         
         // 디버깅용 로그
-        console.log('Login success - token saved:', {
-          token: data.session_token ? 'received' : 'missing',
-          stored: sessionStorage.getItem('session_token') ? 'stored' : 'not stored'
-        });
+        // console.log('Login success - token saved:', {
+        //   token: data.session_token ? 'received' : 'missing',
+        //   stored: sessionStorage.getItem('session_token') ? 'stored' : 'not stored'
+        // }); // 로그인 성공 로그 간소화
         
         return { success: true, data: { ...data, success: true, message: data.response } };
       } else if (data.login_failed) {
@@ -223,10 +223,10 @@ class ApiClient {
     this.userApiKey = localStorage.getItem('user_api_key');
     
     // 디버깅용 로그
-    console.log('Auth restored:', {
-      sessionToken: this.sessionToken ? 'restored' : 'not found',
-      userApiKey: this.userApiKey ? 'restored' : 'not found'
-    });
+    // console.log('Auth restored:', {
+    //   sessionToken: this.sessionToken ? 'restored' : 'not found',
+    //   userApiKey: this.userApiKey ? 'restored' : 'not found'
+    // }); // 앱 시작시 한번만 필요한 로그
   }
 
   // 로그아웃

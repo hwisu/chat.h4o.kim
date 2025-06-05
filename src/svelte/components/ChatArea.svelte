@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { messagesState, authState, uiState } from '../stores.js';
+  import { messagesState } from '../stores/messages.svelte';
+import { authState } from '../stores/auth.svelte';
+import { uiState } from '../stores/ui.svelte';
   import ChatMessage from './ChatMessage.svelte';
 
   let chatContainer;

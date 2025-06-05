@@ -32,7 +32,7 @@
     {/if}
   </div>
   <button class="copy-button" onclick={copyToClipboard}>
-    Copy all
+    copy all
   </button>
 </div>
 

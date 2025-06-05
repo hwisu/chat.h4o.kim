@@ -1,9 +1,10 @@
 import { defineConfig } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
+import svelteConfig from './svelte.config.mjs';
 
 export default defineConfig({
   base: '/svelte/',
-  plugins: [svelte()],
+  plugins: [svelte(svelteConfig)],
   build: {
     outDir: 'public/svelte',
     emptyOutDir: true,

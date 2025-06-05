@@ -2,14 +2,11 @@
 // 앱 시작 시 필요한 초기화 로직들
 
 import { apiClient } from './api.js';
-import { 
-  updateAuth, 
-  updateModels, 
-  updateRoles, 
-  updateContext,
-  setLoading,
-  setError
-} from '../stores.js';
+import { updateAuth } from '../stores/auth.svelte.ts';
+import { updateModels } from '../stores/models.svelte.ts';
+import { updateRoles } from '../stores/roles.svelte.ts';
+import { updateContext } from '../stores/context.svelte.ts';
+import { setLoading, setError } from '../stores/ui.svelte.ts';
 
 // 앱 초기화 메인 함수
 export async function initializeApp() {

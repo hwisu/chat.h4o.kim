@@ -1,7 +1,8 @@
 import { apiClient } from './api.js';
-import { addMessage, setLoading } from '../stores';
+import { addMessage } from '../stores/messages.svelte';
+import { setLoading } from '../stores/ui.svelte';
 import { initializeApp } from './app.js';
-import type { ChatMessage } from '../stores/messages';
+import type { ChatMessage } from '../stores/messages.svelte';
 
 export class ChatService {
   /**
@@ -107,7 +108,7 @@ export class ChatService {
 
     if (result.success && result.data) {
       if (result.data.response) {
-        console.log('Token usage from API:', result.data.usage);
+        // console.log('Token usage from API:', result.data.usage); // 채팅마다 출력되는 로그 제거
         this.addAssistantMessage(
           result.data.response,
           result.data.model,

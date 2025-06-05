@@ -1,5 +1,8 @@
 <script lang="ts">
-  import { authStore, modelsStore, rolesStore, contextStore } from '../stores.js';
+  import { authState } from '../stores/auth.svelte';
+import { modelsState } from '../stores/models.svelte';
+import { rolesState } from '../stores/roles.svelte';
+import { contextState } from '../stores/context.svelte';
 
   // Svelte 5 props 시스템 사용
   interface Props {
@@ -14,30 +17,30 @@
   <div class="chat-title">
     <button 
       class="model-title" 
-      class:authenticated={$authStore.isAuthenticated}
+      class:authenticated={authState.isAuthenticated}
       onclick={onModelClick}
       aria-label="Select model"
     >
-      {$modelsStore.selectedInfo.name}
+      {modelsState.selectedInfo.name}
     </button>
     <button 
       class="role-title" 
       onclick={onRoleClick}
       aria-label="Select role"
     >
-      {$rolesStore.selectedInfo.name}
+      {rolesState.selectedInfo.name}
     </button>
   </div>
   <div class="header-right">
     <div class="header-info">
       <div class="context-info">
-        Context: {Math.round($modelsStore.selectedInfo.contextSize / 1000)}K
+        Context: {Math.round(modelsState.selectedInfo.contextSize / 1000)}K
       </div>
       <div class="auth-status">
-        {#if $authStore.isAuthenticated}
+        {#if authState.isAuthenticated}
           Server Key
         {:else}
-          {$authStore.status}
+          {authState.status}
         {/if}
       </div>
     </div>

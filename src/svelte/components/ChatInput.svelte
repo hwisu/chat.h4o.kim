@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { messagesState, uiState } from '../stores/index.js';
+  import { messagesState } from '../stores/messages.svelte';
+import { uiState } from '../stores/ui.svelte';
   import { chatService } from '../services/chatService.js';
 
   // Svelte 5 props 시스템 사용

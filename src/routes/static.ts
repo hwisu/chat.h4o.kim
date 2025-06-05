@@ -5,7 +5,7 @@ const staticFiles = new Hono<{ Bindings: Env }>();
 
 // Serve static files with proper fallback
 async function serveStaticFile(c: any, fileName: string = 'index.html') {
-  console.log('STATIC HANDLER: Serving file =', fileName);
+  // console.log('STATIC HANDLER: Serving file =', fileName); // 빈번한 로그 제거
 
   try {
     // Check if ASSETS binding is available (for production)
@@ -30,7 +30,7 @@ async function serveStaticFile(c: any, fileName: string = 'index.html') {
       return response;
     } else {
       // Fallback for local development
-      console.log('ASSETS binding not available, returning fallback message');
+      // console.log('ASSETS binding not available, returning fallback message'); // 개발용 로그 제거
       return c.html(`
 <!DOCTYPE html>
 <html lang="ko">
@@ -95,13 +95,13 @@ async function serveStaticFile(c: any, fileName: string = 'index.html') {
 
 // Serve index.html for root and SPA fallback
 staticFiles.get('/', async (c) => {
-  console.log('STATIC HANDLER: Root path requested');
+  // console.log('STATIC HANDLER: Root path requested'); // 빈번한 로그 제거
   return serveStaticFile(c, 'index.html');
 });
 
 // Serve index.html explicitly
 staticFiles.get('/index.html', async (c) => {
-  console.log('STATIC HANDLER: index.html requested');
+  // console.log('STATIC HANDLER: index.html requested'); // 빈번한 로그 제거
   return serveStaticFile(c, 'index.html');
 });
 
