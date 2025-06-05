@@ -41,7 +41,8 @@ async function processContextAndSummary(
   currentSummary: string | null,
   newMessage: string,
   systemPrompt: string,
-  apiKey: string
+  apiKey: string,
+  currentUserModel?: string
 ): Promise<ContextProcessingResult> {
   // 현재 상태로 임시 메시지 구성해서 실제 토큰 수 확인
   const preliminaryMessages = buildMessagesWithSummary(
@@ -57,7 +58,10 @@ async function processContextAndSummary(
     timestamp: Date.now()
   })));
 
-  const needsSummary = actualTokenCount > 24000 && !currentSummary;
+  // 요약 조건을 더 엄격하게: 24k 토큰 이상이고, 아직 요약이 없고, 충분한 메시지가 있을 때만
+  const needsSummary = actualTokenCount > 24000 && 
+                      !currentSummary && 
+                      chatMessages.length >= 10;
 
   let summaryData: any = null;
   let finalMessages = chatMessages;
@@ -65,11 +69,13 @@ async function processContextAndSummary(
 
   if (needsSummary) {
     try {
-      summaryData = await processSummarization(chatMessages, apiKey);
+      console.log(`🔄 Starting auto-summarization for ${chatMessages.length} messages (${actualTokenCount} tokens)`);
+      summaryData = await processSummarization(chatMessages, apiKey, undefined, currentUserModel);
       finalMessages = summaryData.remainingMessages;
       finalSummary = summaryData.summary;
+      console.log(`✅ Auto-summarization completed: ${summaryData.summarizedMessageCount} messages summarized`);
     } catch (error) {
-      console.warn('Auto-summary failed, proceeding without summary:', error);
+      console.warn('❌ Auto-summary failed, proceeding without summary:', error instanceof Error ? error.message : error);
     }
   }
 
@@ -175,6 +181,9 @@ chat.post('/chat', async (c) => {
       const apiKey = getApiKey(c);
       const selectedModel = await getSelectedModel(c, model, true);
       const systemPrompt = getRoleSystemPrompt(currentRole);
+      
+      console.log('🎭 Current role:', currentRole);
+      console.log('🤖 System prompt preview:', systemPrompt ? systemPrompt.substring(0, 100) + '...' : 'No system prompt');
 
       // 사용자 메시지를 컨텍스트에 추가
       await contextManager.addMessage(userId, 'user', message);
@@ -188,7 +197,8 @@ chat.post('/chat', async (c) => {
         updatedContext.summary,
         message,
         systemPrompt,
-        apiKey
+        apiKey,
+        selectedModel
       );
 
       // 최종 메시지 구성

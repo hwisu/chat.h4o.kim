@@ -1,11 +1,14 @@
 {
   "name": "terminal-openrouter-chat",
-  "version": "1.0.11",
+  "version": "1.0.12",
   "description": "Terminal-style chat interface using OpenRouter free models with Korean language optimization",
   "main": "src/index.ts",
+  "type": "module",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && vite build",
     "dev": "wrangler dev",
+    "svelte-dev": "vite",
+    "dev-all": "./scripts/dev.sh",
     "type-check": "tsc --noEmit",
     "deploy": "wrangler deploy"
   },
@@ -21,7 +24,14 @@
   "license": "MIT",
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241218.0",
+    "@sveltejs/vite-plugin-svelte": "^5.1.0",
+    "svelte": "^5.33.14",
+    "svelte-loader": "^3.2.4",
     "typescript": "^5.3.0",
+    "vite": "^6.3.5",
+    "webpack": "^5.99.9",
+    "webpack-cli": "^6.0.1",
+    "webpack-dev-server": "^5.2.2",
     "wrangler": "^4.17.0"
   },
   "dependencies": {

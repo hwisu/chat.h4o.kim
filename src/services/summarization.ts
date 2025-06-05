@@ -73,7 +73,7 @@ function filterSummaryModels(models: OpenRouterModel[]): OpenRouterModel[] {
   });
 }
 
-// 요약용 모델 목록 가져오기
+// 요약용 모델 목록 가져오기 (완전히 동적)
 async function getSummaryModels(apiKey: string): Promise<OpenRouterModel[]> {
   if (summaryModelsCache &&
       Date.now() - summaryModelsCache.timestamp < SUMMARY_CACHE_DURATION) {
@@ -85,7 +85,9 @@ async function getSummaryModels(apiKey: string): Promise<OpenRouterModel[]> {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://chat.h4o.kim',
+        'X-Title': 'Chatty'
       }
     });
 
@@ -98,39 +100,22 @@ async function getSummaryModels(apiKey: string): Promise<OpenRouterModel[]> {
         timestamp: Date.now()
       };
 
+      console.log(`📊 Summary models available (first 3):`, 
+        summaryModels.slice(0, 3).map(m => `${m.id}: ${m.context_length} tokens`).join('\n  ')
+      );
+
       return summaryModels;
+    } else {
+      console.warn(`Failed to fetch models: ${response.status} ${response.statusText}`);
+      throw new Error(`Failed to fetch models: ${response.status}`);
     }
   } catch (error) {
-    return getFallbackSummaryModels();
+    console.warn('Failed to fetch summary models from API:', error);
+    throw new Error(`Could not fetch available models: ${error}`);
   }
-
-  return getFallbackSummaryModels();
 }
 
-function getFallbackSummaryModels(): OpenRouterModel[] {
-  const hardcodedModels = [
-    'google/gemma-3-flash:free',
-    'google/gemini-1.5-flash:free',
-    'anthropic/claude-3-haiku:free',
-    'google/gemma-7b:free',
-    'mistralai/mistral-7b:free'
-  ];
-
-  return hardcodedModels.map(id => ({
-    id,
-    name: id.split('/').pop() || id,
-    context_length: 16000,
-    architecture: {
-      input_modalities: ['text'],
-      output_modalities: ['text'],
-      tokenizer: 'unknown'
-    },
-    pricing: {
-      prompt: '0',
-      completion: '0'
-    }
-  }));
-}
+// 하드코딩된 폴백 모델 제거 - 항상 동적으로 받아온 모델만 사용
 
 // 토큰 캐싱을 위한 Map
 const tokenCountCache = new Map<string, number>();
@@ -160,12 +145,19 @@ export function estimateTokenCount(messages: ChatMessage[]): number {
   return estimatedTokens;
 }
 
-// 요약이 필요한지 확인 (토큰 기준)
+// 요약이 필요한지 확인 (토큰 기준 + 메시지 수 기준)
 export function shouldTriggerSummary(
   messages: ChatMessage[],
   config: SummarizationConfig = DEFAULT_SUMMARY_CONFIG
 ): boolean {
+  // 최소 메시지 수 체크 (요약하기에 충분한 대화가 있어야 함)
+  if (messages.length < 10) {
+    return false;
+  }
+  
   const estimatedTokens = estimateTokenCount(messages);
+  
+  // 토큰 수가 기준을 넘어야 하고, 최소한의 대화 세션이 있어야 함
   return estimatedTokens > config.maxTokensBeforeSummary;
 }
 
@@ -242,70 +234,116 @@ function ensureConversationCompleteness(messages: ChatMessage[], splitIndex: num
   return splitIndex;
 }
 
-// 대화 요약 생성
+// 대화 요약 생성 (완전히 동적 모델 선택)
 export async function summarizeConversation(
   messages: ChatMessage[],
   apiKey: string,
-  config: SummarizationConfig = DEFAULT_SUMMARY_CONFIG
+  config: SummarizationConfig = DEFAULT_SUMMARY_CONFIG,
+  fallbackModelId?: string // 사용자가 현재 선택한 모델을 폴백으로 사용
 ): Promise<string> {
   if (messages.length < 4) {
     return '';
   }
 
-  const summaryModels = await getSummaryModels(apiKey);
+  let summaryModels: OpenRouterModel[] = [];
+  
+  try {
+    summaryModels = await getSummaryModels(apiKey);
+  } catch (error) {
+    console.warn('Could not fetch summary models dynamically:', error);
+    
+    // 동적 모델 가져오기 실패 시 현재 사용자 모델을 폴백으로 사용
+    if (fallbackModelId) {
+      console.log(`🔄 Using current user model as summary fallback: ${fallbackModelId}`);
+      summaryModels = [{
+        id: fallbackModelId,
+        name: fallbackModelId.split('/').pop() || fallbackModelId,
+        context_length: 131072,
+        architecture: {
+          input_modalities: ['text'],
+          output_modalities: ['text'],
+          tokenizer: 'unknown'
+        },
+        pricing: {
+          prompt: '0',
+          completion: '0'
+        }
+      }];
+    } else {
+      throw new Error('No summary models available and no fallback model provided');
+    }
+  }
+
   if (!summaryModels || summaryModels.length === 0) {
     throw new Error('No summary models available');
   }
-
-  const summaryModelId = summaryModels[0].id;
 
   const conversationText = messages.map(msg => {
     const role = msg.role.toUpperCase();
     return `${role}: ${msg.content}`;
   }).join('\n\n');
 
-  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://h4o.kim/',
-      'X-Title': 'Chatty Context Summarization'
-    },
-    body: JSON.stringify({
-      model: summaryModelId,
-      messages: [
-        {
-          role: 'system',
-          content: SUMMARY_PROMPT
+  // 여러 모델을 순차적으로 시도
+  for (let i = 0; i < Math.min(3, summaryModels.length); i++) {
+    const summaryModelId = summaryModels[i].id;
+    
+    try {
+      console.log(`🔄 Attempting summarization with model: ${summaryModelId}`);
+      
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://chat.h4o.kim',
+          'X-Title': 'Chatty Context Summarization'
         },
-        {
-          role: 'user',
-          content: conversationText
+        body: JSON.stringify({
+          model: summaryModelId,
+          messages: [
+            {
+              role: 'system',
+              content: SUMMARY_PROMPT
+            },
+            {
+              role: 'user',
+              content: conversationText
+            }
+          ],
+          max_tokens: config.summaryTargetTokens,
+          temperature: 0.3,
+          frequency_penalty: 0.5,
+          presence_penalty: 0.5
+        })
+      });
+
+      if (response.ok) {
+        const result: any = await response.json();
+
+        if (result.choices && result.choices.length > 0) {
+          const summary = result.choices[0].message.content.trim();
+          console.log(`✅ Summarization successful with model: ${summaryModelId}`);
+          return summary;
         }
-      ],
-      max_tokens: config.summaryTargetTokens,
-      temperature: 0.3,
-      frequency_penalty: 0.5,
-      presence_penalty: 0.5
-    })
-  });
-
-  if (!response.ok) {
-    throw new Error(`Summarization failed: ${response.status} ${response.statusText}`);
-  }
-
-  try {
-    const result = await response.json();
-
-    if (result.choices && result.choices.length > 0) {
-      return result.choices[0].message.content.trim();
+      } else {
+        console.warn(`❌ Summarization failed with model ${summaryModelId}: ${response.status} ${response.statusText}`);
+        
+        if (i === summaryModels.length - 1) {
+          throw new Error(`All summary models failed. Last error: ${response.status} ${response.statusText}`);
+        }
+        // 다음 모델로 계속
+      }
+    } catch (error) {
+      console.warn(`❌ Error with summary model ${summaryModelId}:`, error);
+      
+      if (i === Math.min(3, summaryModels.length) - 1) {
+        throw new Error(`All summary models failed. Last error: ${error}`);
+      }
+      // 다음 모델로 계속
     }
-
-    throw new Error('Invalid response format from summary API');
-  } catch (error) {
-    throw new Error('Failed to generate summary');
   }
+
+  throw new Error('Failed to generate summary with any available model');
 }
 
 // 요약과 함께 메시지 구성
@@ -359,7 +397,8 @@ export interface SummaryResponse {
 export async function processSummarization(
   messages: ChatMessage[],
   apiKey: string,
-  config: SummarizationConfig = DEFAULT_SUMMARY_CONFIG
+  config: SummarizationConfig = DEFAULT_SUMMARY_CONFIG,
+  currentUserModel?: string // 현재 사용자가 선택한 모델
 ): Promise<SummaryResponse> {
   if (!shouldTriggerSummary(messages, config)) {
     return {
@@ -382,7 +421,7 @@ export async function processSummarization(
   }
 
   try {
-    const summary = await summarizeConversation(messagesToSummarize, apiKey, config);
+    const summary = await summarizeConversation(messagesToSummarize, apiKey, config, currentUserModel);
 
     return {
       summary,

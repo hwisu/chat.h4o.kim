@@ -44,7 +44,7 @@ export async function checkAuthenticationOrUserKey(c: any): Promise<boolean> {
       jwt.verify(sessionToken, jwtSecret);
       return true;
     } catch (error) {
-      console.warn('Invalid session token:', error);
+      console.warn('Invalid session token:', error instanceof Error ? error.message : String(error));
       return false;
     }
   }

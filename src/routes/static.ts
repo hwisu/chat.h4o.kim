@@ -105,17 +105,6 @@ staticFiles.get('/index.html', async (c) => {
   return serveStaticFile(c, 'index.html');
 });
 
-// Serve manifest.json
-staticFiles.get('/manifest.json', async (c) => {
-  console.log('STATIC HANDLER: manifest.json requested');
-  return serveStaticFile(c, 'manifest.json');
-});
-
-// Serve service worker
-staticFiles.get('/sw.js', async (c) => {
-  console.log('STATIC HANDLER: sw.js requested');
-  return serveStaticFile(c, 'sw.js');
-});
 
 // Handle all other routes with SPA fallback
 staticFiles.get('*', async (c) => {
