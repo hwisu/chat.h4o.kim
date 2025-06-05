@@ -610,15 +610,22 @@ class TerminalChat {
                 throw new Error('Empty response from server');
             }
 
-            // Add assistant response to conversation
-            this.addMessage(data.response, 'assistant');
+            console.log('Server response data:', data);
+            console.log('Server usage data:', data.usage);
 
             // 서버가 컨텍스트를 관리하므로 토큰 사용량만 업데이트
             if (data.usage) {
                 this.lastUsage = data.usage; // 토큰 사용량 저장
+                console.log('Setting lastUsage:', this.lastUsage);
                 const totalTokens = data.usage.total_tokens || (data.usage.prompt_tokens + data.usage.completion_tokens);
                 this.currentTokenUsage = totalTokens;
+            } else {
+                console.warn('No usage data in server response');
+                this.lastUsage = null;
             }
+
+            // Add assistant response to conversation
+            this.addMessage(data.response, 'assistant', data.model);
 
             // 컨텍스트 표시 업데이트 (서버 관리이므로 추정값만 표시)
             this.updateContextDisplay();
@@ -1009,17 +1016,25 @@ class TerminalChat {
             <div class="message-content">${role === 'assistant' ? this.markdownParser.renderContent(content) : this.escapeHtml(content)}</div>
         `;
 
-        // 토큰 사용량 표시 (AI 응답 메시지에만)
-        if (role === 'assistant' && this.lastUsage) {
-            const tokenInfo = document.createElement('div');
-            tokenInfo.className = 'token-usage';
+        // 토큰 사용량 표시 및 디버깅 (AI 응답 메시지에만)
+        if (role === 'assistant') {
+            console.log('Last usage data:', this.lastUsage);
 
-            // 입력 및 출력 토큰 수를 포맷팅
-            const promptTokens = this.formatTokenCount(this.lastUsage.prompt_tokens);
-            const completionTokens = this.formatTokenCount(this.lastUsage.completion_tokens);
+            // 토큰 사용량 정보가 있으면 표시
+            if (this.lastUsage && (this.lastUsage.prompt_tokens || this.lastUsage.completion_tokens)) {
+                const tokenInfo = document.createElement('div');
+                tokenInfo.className = 'token-usage';
 
-            tokenInfo.innerHTML = `<span class="token-prompt">↑ ${promptTokens}</span> <span class="token-completion">↓ ${completionTokens}</span>`;
-            messageDiv.appendChild(tokenInfo);
+                // 입력 및 출력 토큰 수를 포맷팅
+                const promptTokens = this.formatTokenCount(this.lastUsage.prompt_tokens || 0);
+                const completionTokens = this.formatTokenCount(this.lastUsage.completion_tokens || 0);
+
+                tokenInfo.innerHTML = `<span class="token-prompt">↑ ${promptTokens}</span> <span class="token-completion">↓ ${completionTokens}</span>`;
+                messageDiv.appendChild(tokenInfo);
+                console.log('Token info added to message:', promptTokens, completionTokens);
+            } else {
+                console.log('No token usage data available for this message');
+            }
         }
 
         this.output.appendChild(messageDiv);
@@ -1544,15 +1559,28 @@ document.addEventListener('DOMContentLoaded', () => {
     style.textContent = `
     .token-usage {
         font-size: 11px;
-        color: #888;
-        margin-top: 5px;
+        color: #aaa;
+        margin-top: 8px;
         text-align: right;
-        opacity: 0.7;
+        opacity: 0.9;
+        background-color: rgba(0, 0, 0, 0.1);
+        padding: 4px 8px;
+        border-radius: 4px;
+        display: inline-block;
+        float: right;
     }
 
     .token-prompt, .token-completion {
         display: inline-block;
         margin: 0 3px;
+    }
+
+    .token-prompt {
+        color: #7fbf7f;
+    }
+
+    .token-completion {
+        color: #7f7fbf;
     }
     `;
     document.head.appendChild(style);
