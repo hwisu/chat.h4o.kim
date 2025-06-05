@@ -28,29 +28,6 @@ async function encryptPassword(password: string, secret: string): Promise<string
   return token;
 }
 
-// Advanced decryption function for login tokens
-async function decryptPassword(encrypted: string, secret: string): Promise<string | null> {
-  try {
-    // JWT 라이브러리를 사용하여 검증
-    const payload = jwt.verify(encrypted, secret) as any;
-
-    // 만료 확인
-    if (Date.now() / 1000 > payload.exp) {
-      return null;
-    }
-
-    // 발급자 확인
-    if (payload.iss !== "chatty-h4o") {
-      return null;
-    }
-
-    return payload.pwd;
-  } catch (error) {
-    console.warn('Token verification failed:', error);
-    return null;
-  }
-}
-
 // Check if user is authenticated OR has valid user API key
 export async function checkAuthenticationOrUserKey(c: any): Promise<boolean> {
   const userApiKey = c.req.header('X-User-API-Key');

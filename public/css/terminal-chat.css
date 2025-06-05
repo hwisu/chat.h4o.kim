@@ -210,12 +210,6 @@
     pointer-events: auto;
 }
 
-.send-icon {
-    width: 16px;
-    height: 16px;
-    fill: currentColor;
-}
-
 /* Loading spinner inside send button */
 .button-spinner {
     display: flex;
@@ -571,18 +565,6 @@
     word-wrap: break-word;
     overflow-wrap: break-word;
     white-space: normal;
-}
-
-.model-id {
-    font-size: 12px;
-    color: #888;
-    margin-top: 2px;
-}
-
-.model-provider {
-    color: #888;
-    font-size: 12px;
-    margin-top: 2px;
 }
 
 /* Role-related styles */

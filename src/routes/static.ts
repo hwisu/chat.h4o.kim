@@ -3,43 +3,6 @@ import { Env } from '../types';
 
 const staticFiles = new Hono<{ Bindings: Env }>();
 
-// Helper function to check authentication
-function checkAuth(c: any): boolean {
-  const accessPassword = c.env.ACCESS_PASSWORD
-  const encryptionSecret = c.env.OPENROUTER_API_KEY?.slice(0, 16) || 'default-secret-key';
-
-  // Check for password in query, header, or encrypted cookie
-  const queryPassword = c.req.query('password');
-  const headerPassword = c.req.header('X-Access-Password');
-  const encryptedCookie = c.req.header('Cookie')?.includes('auth_token=') ?
-    c.req.header('Cookie')?.split('auth_token=')[1]?.split(';')[0] : null;
-
-  let providedPassword = queryPassword || headerPassword;
-
-  // If no direct password, try to decrypt cookie (simple legacy format only)
-  if (!providedPassword && encryptedCookie) {
-    try {
-      const decoded = atob(encryptedCookie.replace(/[-_]/g, (m: string) => {
-        const mapping: { [key: string]: string } = { '-': '+', '_': '/' };
-        return mapping[m] || m;
-      }));
-      const [password, timestamp, secretCheck] = decoded.split('|');
-
-      // Check if secret matches and token is not older than 24 hours
-      if (secretCheck === encryptionSecret) {
-        const tokenAge = Date.now() - parseInt(timestamp);
-        if (tokenAge <= 24 * 60 * 60 * 1000) {
-          providedPassword = password;
-        }
-      }
-    } catch {
-      // Ignore decryption errors
-    }
-  }
-
-  return providedPassword === accessPassword;
-}
-
 // Serve static files with proper fallback
 async function serveStaticFile(c: any, fileName: string = 'index.html') {
   console.log('STATIC HANDLER: Serving file =', fileName);

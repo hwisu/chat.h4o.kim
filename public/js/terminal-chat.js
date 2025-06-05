@@ -22,7 +22,6 @@ class TerminalChat {
 
         this.maxContextSize = 128000; // Will be dynamically set based on selected model
         this.currentTokenUsage = 0; // Current actual token usage (from server)
-        this.estimatedTokenUsage = 0; // Estimated usage (client-side)
 
         // User API key management
         this.userApiKey = null;
@@ -719,11 +718,10 @@ class TerminalChat {
                                 // 클라이언트 상태도 초기화
                                 this.conversationHistory = [];
                                 this.currentTokenUsage = 0;
-                                this.estimatedTokenUsage = 0;
-                        this.output.innerHTML = '';
+                                this.output.innerHTML = '';
                                 this.updateContextDisplay();
-                        this.addSystemMessage('🔄 Chat cleared. How can I help you?');
-                        success = true;
+                                this.addSystemMessage('🔄 Chat cleared. How can I help you?');
+                                success = true;
                             } else {
                                 const errorData = await response.json();
                                 this.addMessage(`❌ Failed to clear context: ${errorData.error}`, 'error');
@@ -1255,7 +1253,6 @@ class TerminalChat {
     clearConversationHistory() {
         this.conversationHistory = [];
         this.currentTokenUsage = 0;
-        this.estimatedTokenUsage = 0;
         this.updateContextDisplay();
     }
 
@@ -1405,12 +1402,6 @@ class TerminalChat {
         }
 
         this.updateAuthStatus();
-    }
-
-    // Estimate tokens more accurately
-    estimateTokens(text) {
-        // More accurate token estimation: ~3.5 characters per token on average
-        return Math.ceil(text.length / 3.5);
     }
 
     async handleRolesCommand() {
