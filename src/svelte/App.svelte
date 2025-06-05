@@ -3,9 +3,35 @@
   import Header from './components/Header.svelte';
   import ChatArea from './components/ChatArea.svelte';
   import ChatInput from './components/ChatInput.svelte';
-  import AuthModal from './components/AuthModal.svelte';
-  import ModelModal from './components/ModelModal.svelte';
-  import RoleModal from './components/RoleModal.svelte';
+  // 모달 컴포넌트들을 동적으로 로드
+  let AuthModal = $state(null);
+  let ModelModal = $state(null);
+  let RoleModal = $state(null);
+
+  // 동적 로드 함수들
+  async function loadAuthModal() {
+    if (!AuthModal) {
+      const module = await import('./components/AuthModal.svelte');
+      AuthModal = module.default;
+    }
+    return AuthModal;
+  }
+
+  async function loadModelModal() {
+    if (!ModelModal) {
+      const module = await import('./components/ModelModal.svelte');
+      ModelModal = module.default;
+    }
+    return ModelModal;
+  }
+
+  async function loadRoleModal() {
+    if (!RoleModal) {
+      const module = await import('./components/RoleModal.svelte');
+      RoleModal = module.default;
+    }
+    return RoleModal;
+  }
   import { appStateManager } from './services/appState';
 
   // 모달 상태 관리
@@ -57,26 +83,32 @@
   
   <ChatInput onScrollToBottom={handleScrollToBottom} />
 
-  <!-- 모달들 -->
+  <!-- 모달들 - 동적 로드 -->
   {#if modalState.showAuthModal}
-    <AuthModal 
-      onClose={closeAuthModal}
-      onSuccess={handleAuthSuccess}
-    />
+    {#await loadAuthModal() then AuthModalComponent}
+      <AuthModalComponent 
+        onClose={closeAuthModal}
+        onSuccess={handleAuthSuccess}
+      />
+    {/await}
   {/if}
 
   {#if modalState.showModelModal}
-    <ModelModal 
-      onClose={closeModelModal}
-      onSelect={handleModelSelect}
-    />
+    {#await loadModelModal() then ModelModalComponent}
+      <ModelModalComponent 
+        onClose={closeModelModal}
+        onSelect={handleModelSelect}
+      />
+    {/await}
   {/if}
 
   {#if modalState.showRoleModal}
-    <RoleModal 
-      onClose={closeRoleModal}
-      onSelect={handleRoleSelect}
-    />
+    {#await loadRoleModal() then RoleModalComponent}
+      <RoleModalComponent 
+        onClose={closeRoleModal}
+        onSelect={handleRoleSelect}
+      />
+    {/await}
   {/if}
 </div>
 

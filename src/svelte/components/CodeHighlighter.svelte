@@ -1,8 +1,27 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import hljs from 'highlight.js';
+  // 필요한 언어만 임포트하여 번들 크기 최적화
+  import hljs from 'highlight.js/lib/core';
+  import javascript from 'highlight.js/lib/languages/javascript';
+  import typescript from 'highlight.js/lib/languages/typescript';
+  import python from 'highlight.js/lib/languages/python';
+  import json from 'highlight.js/lib/languages/json';
+  import css from 'highlight.js/lib/languages/css';
+  import html from 'highlight.js/lib/languages/xml';
+  import bash from 'highlight.js/lib/languages/bash';
   import { marked } from 'marked';
   import 'highlight.js/styles/github-dark.css';
+
+  // 언어 등록
+  hljs.registerLanguage('javascript', javascript);
+  hljs.registerLanguage('typescript', typescript);
+  hljs.registerLanguage('python', python);
+  hljs.registerLanguage('json', json);
+  hljs.registerLanguage('css', css);
+  hljs.registerLanguage('html', html);
+  hljs.registerLanguage('xml', html);
+  hljs.registerLanguage('bash', bash);
+  hljs.registerLanguage('sh', bash);
 
   interface Props {
     content?: string;
