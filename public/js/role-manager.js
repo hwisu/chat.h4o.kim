@@ -102,7 +102,6 @@ export class RoleManager {
      */
     async loadRoles() {
         if (!this.apiClient) {
-            console.warn('API client not initialized');
             return false;
         }
 
@@ -115,11 +114,9 @@ export class RoleManager {
             }
 
             if (result.status === 401) {
-                console.warn('⚠️ Role loading failed: Authentication required');
                 return false;
             }
         } catch (error) {
-            console.warn('Failed to load roles:', error);
         }
         return false;
     }
@@ -160,7 +157,6 @@ export class RoleManager {
             }
             return true;
         } catch (error) {
-            console.error('Roles fetch error:', error);
             if (this.messageRenderer) {
                 this.messageRenderer.addMessage(`❌ Error fetching roles: ${error.message}`, 'error', null, this.output);
             }
@@ -175,7 +171,6 @@ export class RoleManager {
      */
     async setRole(roleId) {
         if (!this.apiClient) {
-            console.warn('API client not initialized');
             return { success: false, error: 'API client not initialized' };
         }
 
@@ -198,7 +193,6 @@ export class RoleManager {
                 return { success: false, error: result.error || 'Failed to set role' };
             }
         } catch (error) {
-            console.error('Error setting role:', error);
             if (this.messageRenderer) {
                 this.messageRenderer.addMessage(`❌ Error setting role: ${error.message}`, 'error', null, this.output);
             }
@@ -321,7 +315,6 @@ export class RoleManager {
         try {
             localStorage.setItem(this.storageKey, roleId);
         } catch (error) {
-            console.warn('Failed to store role:', error);
         }
     }
 

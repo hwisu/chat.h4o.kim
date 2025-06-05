@@ -15,7 +15,6 @@ export function getStoredUserApiKey(encryptionKey) {
             return simpleDecrypt(encrypted, encryptionKey);
         }
     } catch (error) {
-        console.warn('Failed to decrypt user API key:', error);
     }
     return null;
 }
@@ -34,7 +33,6 @@ export function setStoredUserApiKey(apiKey, encryptionKey) {
             localStorage.removeItem('user-api-key');
         }
     } catch (error) {
-        console.warn('Failed to encrypt user API key:', error);
     }
 }
 
@@ -103,13 +101,10 @@ export async function updateAuthenticationInfo(apiClient, updateCredentials, ele
             authInfo.authType = authResult.authType;
         }
 
-        // 인증 상태 UI 업데이트
         updateAuthStatus(elements, authInfo.isAuthenticated, userApiKey);
 
         return authInfo;
     } catch (error) {
-        console.error('Authentication update error:', error);
-        // 네트워크 오류 시 인증되지 않은 것으로 간주
         const authInfo = {
             isAuthenticated: false,
             authMethod: null,

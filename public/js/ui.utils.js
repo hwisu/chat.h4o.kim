@@ -153,7 +153,6 @@ export function copyMessageContent(messageId) {
                 }, 2000);
             }
         }).catch(err => {
-            console.error('Failed to copy message content:', err);
         });
     }
 }

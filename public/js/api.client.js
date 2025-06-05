@@ -45,7 +45,6 @@ export class ApiClient {
             const response = await fetch(endpoint, requestOptions);
             return { response, ok: response.ok, status: response.status };
         } catch (error) {
-            console.error(`API request failed for ${endpoint}:`, error);
             throw error;
         }
     }
