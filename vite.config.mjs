@@ -15,7 +15,12 @@ export default defineConfig({
         assetFileNames: '[name].[ext]'
       }
     },
-    copyPublicDir: false
+    copyPublicDir: false,
+    sourcemap: false,
+    minify: 'esbuild'
+  },
+  optimizeDeps: {
+    include: ['highlight.js', 'marked']
   },
   server: {
     proxy: {

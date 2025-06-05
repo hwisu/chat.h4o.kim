@@ -2,9 +2,9 @@ import { initializeApp } from './app';
 import { 
   authState, 
   setError, 
-  clearError,
-  type AuthState 
+  clearError
 } from '../stores';
+import type { AuthState } from '../stores/auth.svelte';
 
 interface ModalState {
   showAuthModal: boolean;

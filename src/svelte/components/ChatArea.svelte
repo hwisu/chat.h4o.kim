@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { onMount, afterUpdate } from 'svelte';
-  import { messagesStore, authStore, uiStore } from '../stores.js';
+  import { onMount } from 'svelte';
+  import { messagesState, authState, uiState } from '../stores.js';
   import ChatMessage from './ChatMessage.svelte';
 
   let chatContainer;
@@ -12,8 +12,10 @@
     }
   }
 
-  // 메시지가 업데이트될 때마다 스크롤 조정
-  afterUpdate(() => {
+  // 메시지가 업데이트될 때마다 스크롤 조정 (Svelte 5 runes 방식)
+  $effect(() => {
+    // messagesState 변경을 감지하여 스크롤 조정
+    messagesState.length;
     scrollToBottom();
   });
 
@@ -38,7 +40,7 @@
 
 <div class="chat-output" bind:this={chatContainer}>
   <!-- 시스템 환영 메시지 -->
-  {#if $uiStore.showSystemMessage && !$authStore.isAuthenticated}
+  {#if uiState.showSystemMessage && !authState.isAuthenticated}
     <div class="message system">
       <div class="message-content">
         {@html getWelcomeMessage().replace(/\n/g, '<br>')}
@@ -50,7 +52,7 @@
   {/if}
 
   <!-- 채팅 메시지들 -->
-  {#each $messagesStore as message, index}
+  {#each messagesState as message, index}
     {#if message.role === 'system' && message.type}
       <div class="message {message.type}">
         <div class="message-content">
@@ -72,7 +74,7 @@
   {/each}
 
   <!-- 로딩 인디케이터 -->
-  {#if $uiStore.isLoading}
+  {#if uiState.isLoading}
     <div class="message assistant loading">
       <div class="message-content">
         <div class="loading-dots">

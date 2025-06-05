@@ -1,11 +1,11 @@
 {
   "name": "terminal-openrouter-chat",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "description": "Terminal-style chat interface using OpenRouter free models with Korean language optimization",
   "main": "src/index.ts",
   "type": "module",
   "scripts": {
-    "build": "tsc && vite build",
+    "build": "vite build",
     "dev": "wrangler dev",
     "svelte-dev": "vite",
     "dev-all": "./scripts/dev.sh",
@@ -36,8 +36,10 @@
   },
   "dependencies": {
     "@types/jsonwebtoken": "^9.0.9",
+    "highlight.js": "^11.11.1",
     "hono": "^4.0.0",
     "jsonwebtoken": "^9.0.2",
-    "lz-string": "^1.5.0"
+    "lz-string": "^1.5.0",
+    "marked": "^15.0.12"
   }
 }

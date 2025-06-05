@@ -26,6 +26,10 @@ jobs:
       run: |
         echo "🔧 Building TypeScript and Svelte..."
         npm run build
+        echo "📁 Checking build output..."
+        ls -la public/svelte/
+        echo "🔍 Verifying bundle.js exists..."
+        test -f public/svelte/bundle.js && echo "✅ bundle.js exists" || echo "❌ bundle.js missing"
 
     - name: Deploy to Cloudflare Workers (Production)
       if: github.ref == 'refs/heads/main' && github.event_name == 'push'

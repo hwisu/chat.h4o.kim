@@ -8,8 +8,7 @@ import {
   updateRoles, 
   updateContext,
   setLoading,
-  setError,
-  appStore 
+  setError
 } from '../stores.js';
 
 // 앱 초기화 메인 함수
@@ -37,11 +36,7 @@ export async function initializeApp() {
     showWelcomeMessage();
     
     // 5. 앱 초기화 완료
-    appStore.update(state => ({
-      ...state,
-      isInitialized: true,
-      lastUpdate: new Date()
-    }));
+    console.log('✅ App initialization completed');
     
   } catch (error) {
     console.error('App initialization failed:', error);

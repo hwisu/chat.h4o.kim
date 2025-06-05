@@ -1,14 +1,15 @@
 // 모든 스토어들을 한 곳에서 내보내기
-export * from './auth';
-export * from './models';
-export * from './messages';
-export * from './ui';
+export * from './auth.svelte';
+export type { AuthState } from './auth.svelte';
+export * from './models.svelte';
+export * from './messages.svelte';
+export * from './ui.svelte';
 
 // 기존 코드와의 호환성을 위한 별칭 (runes 기반)
-export { authState as authStore } from './auth';
-export { modelsState as modelsStore } from './models';
-export { messagesState as messagesStore } from './messages';
-export { uiState as uiStore } from './ui';
+export { authState, authState as authStore } from './auth.svelte';
+export { modelsState as modelsStore } from './models.svelte';
+export { messagesState as messagesStore } from './messages.svelte';
+export { uiState as uiStore } from './ui.svelte';
 
 // 역할과 컨텍스트 스토어 (Svelte 5 runes 사용)
 export interface RoleInfo {

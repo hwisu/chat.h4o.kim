@@ -28,7 +28,7 @@ export function clearMessages() {
 }
 
 export function removeMessage(messageId: string) {
-  const index = messagesState.findIndex(msg => msg.id === messageId);
+  const index = messagesState.findIndex((msg: ChatMessage) => msg.id === messageId);
   if (index > -1) {
     messagesState.splice(index, 1);
   }

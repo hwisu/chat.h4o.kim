@@ -1,20 +1,27 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
+  import hljs from 'highlight.js';
+  import { marked } from 'marked';
+  import 'highlight.js/styles/github-dark.css';
 
-  export let content: string = '';
-  export let role: 'user' | 'assistant' = 'assistant';
+  interface Props {
+    content?: string;
+    role?: 'user' | 'assistant';
+  }
+
+  let { content = '', role = 'assistant' }: Props = $props();
 
   let container: HTMLElement;
-  let processedContent = '';
+  let processedContent = $state('');
 
   // content prop 변화를 즉시 로그로 확인
-  $: {
+  $effect(() => {
     console.log('🔥 CONTENT CHANGED:', { 
       length: content.length, 
       preview: content.substring(0, 100),
       hasCodeBlock: content.includes('```')
     });
-  }
+  });
 
   // HTML 이스케이프 함수
   function escapeHtml(text: string) {
@@ -31,12 +38,6 @@
       codePreview: code.substring(0, 50) + '...' 
     });
     
-    const hljs = (window as any).hljs;
-    if (!hljs) {
-      console.warn('❌ highlight.js not available');
-      return escapeHtml(code);
-    }
-
     console.log('✅ hljs available, available languages:', hljs.listLanguages?.() || 'listLanguages not available');
 
     try {
@@ -69,59 +70,42 @@
       return '';
     }
     
-    const marked = (window as any).marked;
-    const hljs = (window as any).hljs;
+    console.log('🔍 Using npm packages: marked and hljs available');
     
-    console.log('🔍 Checking libraries:', { 
-      markedAvailable: !!marked, 
-      hljsAvailable: !!hljs,
-      markedType: typeof marked,
-      hljsType: typeof hljs
-    });
-    
-    if (marked && hljs) {
-      console.log('✅ Both marked and hljs available, using marked with custom renderer');
+    try {
+      // 커스텀 renderer 생성
+      const renderer = new marked.Renderer();
       
-      try {
-        // 커스텀 renderer 생성
-        const renderer = new marked.Renderer();
-        
-        // code 메서드 오버라이드
-        renderer.code = function(code: string, language: string | undefined) {
-          console.log('🔧 renderer.code called:', { 
-            codeLength: code.length, 
-            language,
-            codePreview: code.substring(0, 50) + '...'
-          });
-          
-          const highlightedCode = highlightCode(code, language);
-          console.log('🔧 renderer.code result length:', highlightedCode.length);
-          
-          return `<pre><code class="language-${language || 'text'} hljs">${highlightedCode}</code></pre>`;
-        };
-        
-        // marked 설정
-        marked.setOptions({
-          breaks: true,
-          gfm: true,
-          renderer: renderer
+      // code 메서드 오버라이드
+      renderer.code = function({ text, lang }: { text: string, lang?: string }) {
+        console.log('🔧 renderer.code called:', { 
+          codeLength: text.length, 
+          language: lang,
+          codePreview: text.substring(0, 50) + '...'
         });
         
-        const result = marked.parse(text);
-        console.log('✅ Markdown parsing successful, result length:', result.length);
-        console.log('📝 Parsed result preview:', result.substring(0, 200) + '...');
-        return result;
-      } catch (err) {
-        console.warn('❌ Markdown parsing failed:', err);
-        console.log('🔄 Falling back to fallbackMarkdown');
-        return fallbackMarkdown(text);
-      }
+        const highlightedCode = highlightCode(text, lang);
+        console.log('🔧 renderer.code result length:', highlightedCode.length);
+        
+        return `<pre><code class="language-${lang || 'text'} hljs">${highlightedCode}</code></pre>`;
+      };
+      
+      // marked 설정
+      marked.setOptions({
+        breaks: true,
+        gfm: true,
+        renderer: renderer
+      });
+      
+      const result = marked.parse(text) as string;
+      console.log('✅ Markdown parsing successful, result length:', result.length);
+      console.log('📝 Parsed result preview:', result.substring(0, 200) + '...');
+      return result;
+    } catch (err) {
+      console.warn('❌ Markdown parsing failed:', err);
+      console.log('🔄 Falling back to fallbackMarkdown');
+      return fallbackMarkdown(text);
     }
-    
-    // marked가 없는 경우 fallback
-    console.warn('⚠️ marked not available, using fallback');
-    console.log('🔄 Using fallbackMarkdown');
-    return fallbackMarkdown(text);
   }
 
   // Fallback 마크다운 처리
@@ -201,14 +185,18 @@
   }
 
   // 반응형 업데이트
-  $: if (content) {
-    processContent();
-  }
+  $effect(() => {
+    if (content) {
+      processContent();
+    }
+  });
 
   // DOM 업데이트 후 복사 버튼 추가
-  $: if (processedContent && container) {
-    addCopyButtons();
-  }
+  $effect(() => {
+    if (processedContent && container) {
+      addCopyButtons();
+    }
+  });
 
   onMount(() => {
     processContent();
