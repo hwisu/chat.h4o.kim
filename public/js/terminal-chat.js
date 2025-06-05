@@ -6,8 +6,6 @@ import {
     getProviderColor,
 } from './format.utils.js';
 
-import { simpleEncrypt, simpleDecrypt } from './encryption.utils.js';
-
 import {
     getIOSVersion,
     scrollToBottom,
@@ -31,6 +29,9 @@ import { createApiClient } from './api.client.js';
 import { MarkdownParser } from './markdown.js';
 import { RoleManager } from './role-manager.js';
 import { MessageRenderer } from './message.utils.js';
+
+
+import { handleCommand } from './command.handler.js';
 
 // copyMessageContent 함수를 전역에 등록 (HTML onclick에서 사용하기 위함)
 window.copyMessageContent = copyMessageContent;
@@ -173,10 +174,8 @@ class TerminalChat {
     }
 
     async initializeAppBackground() {
-        // First, always verify authentication with server (cookies are httpOnly)
         await this.updateAuthenticationInfo();
 
-        // Update welcome message based on authentication status
         this.updateWelcomeMessage();
 
         // Then initialize models and roles
@@ -565,210 +564,66 @@ class TerminalChat {
         autoResizeTextarea(this.input);
         this.updateSendButton();
 
-        return new Promise(async (resolve) => {
-            const parts = message.substring(1).split(' ');
-            const command = parts[0].toLowerCase();
-            const args = parts.slice(1);
-
-            try {
-                let success = false;
-                let data = null;
-
-                switch (command) {
-                    case 'login':
-                        if (args.length === 0) {
-                            this.messageRenderer.addMessage('❌ Password required.\n\nUsage: /login <password>', 'error', null, this.output);
-                            break;
-                        }
-
-                        const password = args.join(' ');
-                        const loginResult = await this.apiClient.login(password);
-
-                        if (loginResult.success) {
-                            // Save session token for this tab session
-                            if (loginResult.data.session_token) {
-                                this.sessionToken = loginResult.data.session_token;
-                                sessionStorage.setItem('session_token', this.sessionToken);
-                            }
-
-                            // Clear old cached data to force fresh loading after login
-                            this.availableModels = [];
-                            localStorage.removeItem('cached-models');
-
-                            // Update authentication info from server first
-                            await this.updateAuthenticationInfo();
-
-                            // Then load models and roles sequentially
-                            await this.initializeModelsBackground();
-                            await this.initializeRolesBackground();
-
-                            // Update welcome message after everything is loaded
-                            this.updateWelcomeMessage();
-
-                            this.messageRenderer.addMessage(loginResult.data.response, 'system', null, this.output);
-                            success = true;
-                        } else {
-                            this.messageRenderer.addMessage(loginResult.data.response || '❌ Authentication failed.', 'error', null, this.output);
-                        }
-                        break;
-
-                    case 'clear':
-                        try {
-                            this.updateApiCredentials();
-                            const result = await this.apiClient.clearContext();
-
-                            if (result.success) {
-                                // 클라이언트 상태도 초기화
-                                this.conversationHistory = [];
-                                this.currentTokenUsage = 0;
-                                this.output.innerHTML = '';
-                                this.updateContextDisplay();
-                                this.messageRenderer.addSystemMessage('🔄 Chat cleared. How can I help you?', this.output);
-                                success = true;
-                            } else {
-                                this.messageRenderer.addMessage(`❌ Failed to clear context: ${result.error}`, 'error', null, this.output);
-                            }
-                        } catch (error) {
-                            console.error('Clear context error:', error);
-                            this.messageRenderer.addMessage(`❌ Error clearing context: ${error.message}`, 'error', null, this.output);
-                        }
-                        break;
-
-                    case 'help':
-                        const helpResult = await this.apiClient.getHelp();
-                        if (helpResult.success) {
-                            this.messageRenderer.addMessage(helpResult.response, 'system', null, this.output);
-                        } else {
-                            this.messageRenderer.addMessage('❌ Failed to get help', 'error', null, this.output);
-                        }
-                        success = true;
-                        break;
-
-                    case 'models':
-                        const filterArg = args.length > 0 ? args.join(' ') : null;
-                        await this.handleModelsCommand(filterArg);
-                        success = true;
-                        break;
-
-                    case 'set-model':
-                        if (args.length === 0) {
-                            this.messageRenderer.addMessage('❌ Model ID required.\n\nUsage: /set-model <model-id> or /set-model auto', 'error', null, this.output);
-                            break;
-                        }
-
-                        const modelId = args.join(' ');
-                        await this.setModel(modelId);
-                        success = true;
-                        break;
-
-                    case 'set-api-key':
-                        if (args.length === 0) {
-                            this.messageRenderer.addMessage('❌ API key required.\n\nUsage: /set-api-key <your-openrouter-key>\n\nGet your key: https://openrouter.ai/settings/keys', 'error', null, this.output);
-                            break;
-                        }
-
-                        const apiKey = args.join(' ');
-                        await this.setUserApiKey(apiKey);
-                        success = true;
-                        break;
-
-                    case 'remove-api-key':
-                        this.removeUserApiKey();
-                        success = true;
-                        break;
-
-                    case 'api-key-status':
-                        this.showApiKeyStatus();
-                        success = true;
-                        break;
-
-                    case 'roles':
-                        await this.roleManager.handleRolesCommand(
-                            this.isAuthenticated
-                        );
-                        success = true;
-                        break;
-
-                    case 'set-role':
-                        if (args.length === 0) {
-                            this.messageRenderer.addMessage('❌ Role ID required.\n\nUsage: /set-role <role-id>\n\nUse /roles to see available roles', 'error', null, this.output);
-                            break;
-                        }
-
-                        // API 클라이언트 인증 정보 업데이트
-                        this.updateApiCredentials();
-
-                        const roleId = args.join(' ');
-                        const result = await this.roleManager.setRole(roleId);
-                        if (result.success) {
-                            this.selectedRole = this.roleManager.selectedRole;
-                        }
-                        success = true;
-                        break;
-
-                    default:
-                        this.messageRenderer.addMessage(`❌ Unknown command: /${command}\n\nType /help for available commands.`, 'error', null, this.output);
-                        break;
-                }
-
-                resolve({ success, data });
-            } catch (error) {
-                console.error('Command error:', error);
-                this.messageRenderer.addMessage(`❌ Error executing command: ${error.message}`, 'error', null, this.output);
-                resolve({ success: false, data: null });
-            }
-        });
-    }
-
-    async handleModelsCommand(filterArg = null) {
-        if (!this.isAuthenticated && !this.userApiKey) {
-            this.messageRenderer.addMessage('❌ Authentication required.\n\nUse /login <password> or /set-api-key <key> first.', 'error', null, this.output);
-            return;
-        }
-
         try {
-            this.updateApiCredentials();
-            const modelsResult = await this.apiClient.getModels();
+            // 외부 명령어 처리 함수 호출
+            const dependencies = {
+                output: this.output,
+                messageRenderer: this.messageRenderer,
+                apiClient: this.apiClient,
+                updateApiCredentials: () => this.updateApiCredentials(),
+                updateAuthenticationInfo: () => this.updateAuthenticationInfo(),
+                initializeModelsBackground: () => this.initializeModelsBackground(),
+                initializeRolesBackground: () => this.initializeRolesBackground(),
+                updateWelcomeMessage: () => this.updateWelcomeMessage(),
+                setModel: (modelId) => this.setModel(modelId),
+                setUserApiKey: (apiKey) => this.setUserApiKey(apiKey),
+                removeUserApiKey: () => this.removeUserApiKey(),
+                showApiKeyStatus: () => this.showApiKeyStatus(),
+                roleManager: this.roleManager,
+                isAuthenticated: this.isAuthenticated,
+                userApiKey: this.userApiKey
+            };
 
-            if (modelsResult.success && modelsResult.models && Array.isArray(modelsResult.models)) {
-                // Filter models if filter argument is provided
-                let filteredModels = modelsResult.models;
-                if (filterArg) {
-                    filteredModels = modelsResult.models.filter(model => {
-                        const modelId = typeof model === 'string' ? model : model.id;
-                        return modelId.toLowerCase().includes(filterArg.toLowerCase());
-                    });
+            const result = await handleCommand(dependencies, message);
+
+            // 명령어 처리 결과에 따른 추가 작업
+            if (result.success && result.data) {
+                // 로그인 성공 시 세션 토큰 저장 및 인증 상태 업데이트
+                if (result.data.sessionToken) {
+                    this.sessionToken = result.data.sessionToken;
+                    sessionStorage.setItem('session_token', this.sessionToken);
+
+                    // 로그인 이후 인증 정보가 제대로 표시되도록 인증 상태 설정
+                    if (result.data.needsAuthUpdate) {
+                        this.setAuthenticated(true);
+
+                        // UI 상태 업데이트
+                        updateAuthStatus(
+                            { statusIndicator: this.statusIndicator, authStatus: this.authStatus },
+                            true,
+                            this.userApiKey
+                        );
+                    }
                 }
 
-                if (filteredModels.length === 0) {
-                    const filterMessage = filterArg ? ` matching "${filterArg}"` : '';
-                    this.messageRenderer.addMessage(`❌ No models found${filterMessage}.`, 'error', null, this.output);
-                    return;
+                // 컨텍스트 초기화 요청 시 클라이언트 상태 초기화
+                if (result.data.clearContext) {
+                    this.conversationHistory = [];
+                    this.currentTokenUsage = 0;
+                    this.updateContextDisplay();
                 }
 
-                // Build model list
-                const filterMessage = filterArg ? ` matching "${filterArg}"` : '';
-                let modelList = `📋 Available Models${filterMessage} (${filteredModels.length}/${modelsResult.models.length} total)\n\n`;
-
-                filteredModels.forEach((model, index) => {
-                    const modelId = typeof model === 'string' ? model : model.id;
-                    const contextLength = typeof model === 'object' ? model.context_length : null;
-                    const contextDisplay = formatContextLength(contextLength);
-                    modelList += `${index + 1}. ${modelId} (${contextDisplay})\n`;
-                });
-
-                modelList += `\nUsage: /set-model <model-id> or /set-model auto`;
-                if (filterArg) {
-                    modelList += `\n💡 Use /models without filter to see all models`;
+                // 역할 변경 시 선택된 역할 업데이트
+                if (result.data.newRole) {
+                    this.selectedRole = result.data.newRole;
                 }
-
-                this.messageRenderer.addMessage(modelList, 'system', null, this.output);
-            } else {
-                this.messageRenderer.addMessage('❌ No models available.', 'error', null, this.output);
             }
+
+            return result;
         } catch (error) {
-            console.error('Models fetch error:', error);
-            this.messageRenderer.addMessage(`❌ Error fetching models: ${error.message}`, 'error', null, this.output);
+            console.error('Command processing error:', error);
+            this.messageRenderer.addMessage(`❌ Error processing command: ${error.message}`, 'error', null, this.output);
+            return { success: false, data: null };
         }
     }
 
@@ -1073,7 +928,6 @@ class TerminalChat {
     }
 
     async updateAuthenticationInfo() {
-        // 인증 관련 함수 대체
         const authInfo = await updateAuthenticationInfo(
             this.apiClient,
             () => this.updateApiCredentials(),
@@ -1081,7 +935,6 @@ class TerminalChat {
             this.userApiKey
         );
 
-        // 결과 적용
         this.isAuthenticated = authInfo.isAuthenticated;
         this.authMethod = authInfo.authMethod;
         this.authType = authInfo.authType;

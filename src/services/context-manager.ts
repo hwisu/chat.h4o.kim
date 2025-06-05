@@ -63,7 +63,7 @@ class ContextManager {
     const db = this.ensureDatabase();
 
     const result = await db.prepare(
-      'SELECT * FROM contexts WHERE userId = ?'
+      'SELECT * FROM user_contexts WHERE user_id = ?'
     ).bind(userId).first();
 
     if (!result) {
@@ -77,7 +77,7 @@ class ContextManager {
       };
 
       await db.prepare(
-        'INSERT INTO contexts (userId, conversationHistory, summary, lastActivity, tokenUsage, createdAt) VALUES (?, ?, ?, ?, ?, ?)'
+        'INSERT INTO user_contexts (user_id, conversation_history, summary, last_activity, token_usage, created_at) VALUES (?, ?, ?, ?, ?, ?)'
       ).bind(
         userId,
         JSON.stringify([]),
@@ -93,18 +93,18 @@ class ContextManager {
 
     let conversationHistory: ChatMessage[] = [];
     try {
-      conversationHistory = JSON.parse(result.conversationHistory as string);
+      conversationHistory = JSON.parse(result.conversation_history as string);
     } catch (e) {
       conversationHistory = [];
     }
 
     const context: UserContext = {
-      userId: result.userId as string,
+      userId: result.user_id as string,
       conversationHistory,
       summary: result.summary as string | null,
-      lastActivity: result.lastActivity as number,
-      tokenUsage: result.tokenUsage as number,
-      createdAt: result.createdAt as number
+      lastActivity: result.last_activity as number,
+      tokenUsage: result.token_usage as number,
+      createdAt: result.created_at as number
     };
 
     this.memoryCache.set(userId, context);
@@ -127,22 +127,36 @@ class ContextManager {
       if (key === 'userId') continue;
 
       if (key === 'conversationHistory') {
-        setClause.push('conversationHistory = ?');
+        setClause.push('conversation_history = ?');
         params.push(JSON.stringify(value));
+      } else if (key === 'lastActivity') {
+        setClause.push('last_activity = ?');
+        params.push(value);
+      } else if (key === 'tokenUsage') {
+        setClause.push('token_usage = ?');
+        params.push(value);
+      } else if (key === 'createdAt') {
+        setClause.push('created_at = ?');
+        params.push(value);
       } else {
-        setClause.push(`${key} = ?`);
+        setClause.push(`${this.camelToSnake(key)} = ?`);
         params.push(value);
       }
     }
 
-    setClause.push('lastActivity = ?');
+    setClause.push('last_activity = ?');
     params.push(Date.now());
 
     params.push(userId);
 
     await db.prepare(
-      `UPDATE contexts SET ${setClause.join(', ')} WHERE userId = ?`
+      `UPDATE user_contexts SET ${setClause.join(', ')} WHERE user_id = ?`
     ).bind(...params).run();
+  }
+
+  // camelCase를 snake_case로 변환하는 유틸리티 함수
+  private camelToSnake(str: string): string {
+    return str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
   }
 
   // 메시지 추가
@@ -167,7 +181,7 @@ class ContextManager {
     const db = this.ensureDatabase();
 
     const result = await db.prepare(
-      'SELECT conversationHistory FROM contexts WHERE userId = ?'
+      'SELECT conversation_history FROM user_contexts WHERE user_id = ?'
     ).bind(userId).first();
 
     if (!result) {
@@ -178,7 +192,7 @@ class ContextManager {
 
     let conversationHistory: ChatMessage[] = [];
     try {
-      conversationHistory = JSON.parse(result.conversationHistory as string);
+      conversationHistory = JSON.parse(result.conversation_history as string);
     } catch (e) {
       conversationHistory = [];
     }
@@ -186,7 +200,7 @@ class ContextManager {
     conversationHistory.push(newMessage);
 
     await db.prepare(
-      'UPDATE contexts SET conversationHistory = ?, lastActivity = ? WHERE userId = ?'
+      'UPDATE user_contexts SET conversation_history = ?, last_activity = ? WHERE user_id = ?'
     ).bind(JSON.stringify(conversationHistory), Date.now(), userId).run();
   }
 
@@ -203,7 +217,7 @@ class ContextManager {
     const db = this.ensureDatabase();
 
     await db.prepare(
-      'UPDATE contexts SET conversationHistory = ?, summary = ?, tokenUsage = ?, lastActivity = ? WHERE userId = ?'
+      'UPDATE user_contexts SET conversation_history = ?, summary = ?, token_usage = ?, last_activity = ? WHERE user_id = ?'
     ).bind(JSON.stringify([]), null, 0, Date.now(), userId).run();
   }
 
@@ -214,7 +228,7 @@ class ContextManager {
     const db = this.ensureDatabase();
 
     const result = await db.prepare(
-      'DELETE FROM contexts WHERE userId = ?'
+      'DELETE FROM user_contexts WHERE user_id = ?'
     ).bind(userId).run();
 
     return result.meta.changes > 0;
@@ -229,7 +243,7 @@ class ContextManager {
     const db = this.ensureDatabase();
 
     const result = await db.prepare(
-      'SELECT 1 FROM contexts WHERE userId = ?'
+      'SELECT 1 FROM user_contexts WHERE user_id = ?'
     ).bind(userId).first();
 
     return !!result;
@@ -240,15 +254,15 @@ class ContextManager {
     const db = this.ensureDatabase();
 
     const totalResult = await db.prepare(
-      'SELECT COUNT(*) as count FROM contexts'
+      'SELECT COUNT(*) as count FROM user_contexts'
     ).first();
 
     const activeResult = await db.prepare(
-      'SELECT COUNT(*) as count FROM contexts WHERE lastActivity > ?'
+      'SELECT COUNT(*) as count FROM user_contexts WHERE last_activity > ?'
     ).bind(Date.now() - 86400000).first();
 
     const oldestResult = await db.prepare(
-      'SELECT MIN(createdAt) as oldestCreatedAt FROM contexts'
+      'SELECT MIN(created_at) as oldestCreatedAt FROM user_contexts'
     ).first();
 
     return {
@@ -278,7 +292,7 @@ class ContextManager {
     }
 
     const result = await db.prepare(
-      'DELETE FROM contexts WHERE lastActivity < ?'
+      'DELETE FROM user_contexts WHERE last_activity < ?'
     ).bind(Date.now() - this.maxContextAge).run();
   }
 
@@ -287,7 +301,7 @@ class ContextManager {
     const db = this.ensureDatabase();
 
     const countResult = await db.prepare(
-      'SELECT COUNT(*) as count FROM contexts'
+      'SELECT COUNT(*) as count FROM user_contexts'
     ).first();
 
     const currentCount = countResult?.count as number || 0;
@@ -296,7 +310,7 @@ class ContextManager {
       const excessCount = currentCount - maxContexts;
 
       const result = await db.prepare(
-        'DELETE FROM contexts WHERE userId IN (SELECT userId FROM contexts ORDER BY lastActivity ASC LIMIT ?)'
+        'DELETE FROM user_contexts WHERE user_id IN (SELECT user_id FROM user_contexts ORDER BY last_activity ASC LIMIT ?)'
       ).bind(excessCount).run();
 
       this.memoryCache.clear();
