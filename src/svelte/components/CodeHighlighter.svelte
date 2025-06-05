@@ -17,11 +17,11 @@
 
   // content prop 변화를 즉시 로그로 확인
   $effect(() => {
-    console.log('🔥 CONTENT CHANGED:', { 
-      length: content.length, 
-      preview: content.substring(0, 100),
-      hasCodeBlock: content.includes('```')
-    });
+    // console.log('🔥 CONTENT CHANGED:', {
+    //   length: content.length, 
+    //   preview: content.substring(0, 100),
+    //   hasCodeBlock: content.includes('```')
+    // });
   });
 
   // HTML 이스케이프 함수
@@ -33,45 +33,45 @@
 
   // 코드 하이라이트 전담 함수
   function highlightCode(code: string, language?: string): string {
-    console.log('🎨 highlightCode called with:', { 
-      codeLength: code.length, 
-      language, 
-      codePreview: code.substring(0, 50) + '...' 
-    });
+    // console.log('🎨 highlightCode called with:', { 
+    //   codeLength: code.length, 
+    //   language, 
+    //   codePreview: code.substring(0, 50) + '...' 
+    // });
     
-    console.log('✅ hljs available, available languages:', hljs.listLanguages?.() || 'listLanguages not available');
+    // console.log('✅ hljs available, available languages:', hljs.listLanguages?.() || 'listLanguages not available');
 
     try {
       if (language && hljs.getLanguage(language)) {
-        console.log(`🔍 Highlighting with specific language: ${language}`);
+        // console.log(`🔍 Highlighting with specific language: ${language}`);
         const result = hljs.highlight(code.trim(), { language: language });
-        console.log('✅ Code highlighting successful for', language, 'result length:', result.value.length);
-        console.log('🎨 Highlighted result preview:', result.value.substring(0, 100) + '...');
+        // console.log('✅ Code highlighting successful for', language, 'result length:', result.value.length);
+        // console.log('🎨 Highlighted result preview:', result.value.substring(0, 100) + '...');
         return result.value;
       } else {
-        console.log('🔍 Auto-detecting language...');
+        // console.log('🔍 Auto-detecting language...');
         const result = hljs.highlightAuto(code.trim());
-        console.log('✅ Auto-highlighting successful, detected language:', result.language, 'result length:', result.value.length);
-        console.log('🎨 Highlighted result preview:', result.value.substring(0, 100) + '...');
+        // console.log('✅ Auto-highlighting successful, detected language:', result.language, 'result length:', result.value.length);
+        // console.log('🎨 Highlighted result preview:', result.value.substring(0, 100) + '...');
         return result.value;
       }
     } catch (err) {
-      console.warn('❌ Code highlighting failed:', err);
+      // console.warn('❌ Code highlighting failed:', err);
       return escapeHtml(code);
     }
   }
 
   // 마크다운 처리 함수
   function processMarkdown(text: string): string {
-    console.log('📝 processMarkdown called with text length:', text.length);
-    console.log('📝 Text preview:', text.substring(0, 200) + '...');
+    // console.log('📝 processMarkdown called with text length:', text.length);
+    // console.log('📝 Text preview:', text.substring(0, 200) + '...');
     
     if (!text) {
-      console.log('❌ No text provided');
+      // console.log('❌ No text provided');
       return '';
     }
     
-    console.log('🔍 Using npm packages: marked and hljs available');
+    // console.log('🔍 Using npm packages: marked and hljs available');
     
     try {
       // 커스텀 renderer 생성
@@ -79,14 +79,14 @@
       
       // code 메서드 오버라이드
       renderer.code = function({ text, lang }: { text: string, lang?: string }) {
-        console.log('🔧 renderer.code called:', { 
-          codeLength: text.length, 
-          language: lang,
-          codePreview: text.substring(0, 50) + '...'
-        });
+        // console.log('🔧 renderer.code called:', { 
+        //   codeLength: text.length, 
+        //   language: lang,
+        //   codePreview: text.substring(0, 50) + '...'
+        // });
         
         const highlightedCode = highlightCode(text, lang);
-        console.log('🔧 renderer.code result length:', highlightedCode.length);
+        // console.log('🔧 renderer.code result length:', highlightedCode.length);
         
         return `<pre><code class="language-${lang || 'text'} hljs">${highlightedCode}</code></pre>`;
       };
@@ -99,31 +99,31 @@
       });
       
       const result = marked.parse(text) as string;
-      console.log('✅ Markdown parsing successful, result length:', result.length);
-      console.log('📝 Parsed result preview:', result.substring(0, 200) + '...');
+      // console.log('✅ Markdown parsing successful, result length:', result.length);
+      // console.log('📝 Parsed result preview:', result.substring(0, 200) + '...');
       return result;
     } catch (err) {
-      console.warn('❌ Markdown parsing failed:', err);
-      console.log('🔄 Falling back to fallbackMarkdown');
+      // console.warn('❌ Markdown parsing failed:', err);
+      // console.log('🔄 Falling back to fallbackMarkdown');
       return fallbackMarkdown(text);
     }
   }
 
   // Fallback 마크다운 처리
   function fallbackMarkdown(text: string): string {
-    console.log('🔄 fallbackMarkdown called with text length:', text.length);
+    // console.log('🔄 fallbackMarkdown called with text length:', text.length);
     
     const result = text
       .replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
-        console.log('🔄 fallback processing code block:', { 
-          lang, 
-          codeLength: code.length,
-          codePreview: code.substring(0, 50) + '...'
-        });
+        // console.log('🔄 fallback processing code block:', { 
+        //   lang, 
+        //   codeLength: code.length,
+        //   codePreview: code.substring(0, 50) + '...'
+        // });
         const highlightedCode = highlightCode(code, lang);
-        console.log('🔄 fallback highlighted code length:', highlightedCode.length);
+        // console.log('🔄 fallback highlighted code length:', highlightedCode.length);
         const blockResult = `<pre><code class="language-${lang || 'text'} hljs">${highlightedCode}</code></pre>`;
-        console.log('🔄 fallback block result length:', blockResult.length);
+        // console.log('🔄 fallback block result length:', blockResult.length);
         return blockResult;
       })
       .replace(/`([^`]+)`/g, '<code>$1</code>')
@@ -131,8 +131,8 @@
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
       .replace(/\n/g, '<br>');
     
-    console.log('🔄 fallbackMarkdown result length:', result.length);
-    console.log('🔄 fallbackMarkdown result preview:', result.substring(0, 200) + '...');
+    // console.log('🔄 fallbackMarkdown result length:', result.length);
+    // console.log('🔄 fallbackMarkdown result preview:', result.substring(0, 200) + '...');
     return result;
   }
 
@@ -176,13 +176,13 @@
 
   // 콘텐츠 처리 및 렌더링
   function processContent() {
-    console.log('🚀 processContent called with content length:', content.length);
-    console.log('🚀 Content preview:', content.substring(0, 100) + '...');
+    // console.log('🚀 processContent called with content length:', content.length);
+    // console.log('🚀 Content preview:', content.substring(0, 100) + '...');
     
     processedContent = processMarkdown(content);
     
-    console.log('🚀 processContent finished, processedContent length:', processedContent.length);
-    console.log('🚀 ProcessedContent preview:', processedContent.substring(0, 200) + '...');
+    // console.log('🚀 processContent finished, processedContent length:', processedContent.length);
+    // console.log('🚀 ProcessedContent preview:', processedContent.substring(0, 200) + '...');
   }
 
   // 반응형 업데이트

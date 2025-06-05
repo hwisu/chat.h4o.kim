@@ -33,7 +33,7 @@ export async function initializeApp() {
     showWelcomeMessage();
     
     // 5. 앱 초기화 완료
-    console.log('✅ App initialization completed');
+    // console.log('✅ App initialization completed');
     
   } catch (error) {
     console.error('App initialization failed:', error);

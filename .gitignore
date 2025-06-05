@@ -50,3 +50,4 @@ coverage/
 # Build outputs
 build/
 out/
+public/svelte/

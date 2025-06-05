@@ -3,11 +3,17 @@ name: Deploy to Cloudflare Workers
 on:
   push:
     branches: [ main ]
+    paths-ignore:
+      - 'public/svelte/**'
+      - 'README.md'
+      - '.github/**'
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     name: Deploy
+    timeout-minutes: 15
 
     steps:
     - name: Checkout
@@ -32,7 +38,6 @@ jobs:
         test -f public/svelte/bundle.js && echo "✅ bundle.js exists" || echo "❌ bundle.js missing"
 
     - name: Deploy to Cloudflare Workers (Production)
-      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
       uses: cloudflare/wrangler-action@v3
       with:
         apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}

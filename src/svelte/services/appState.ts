@@ -124,7 +124,7 @@ export class AppStateManager {
       showRoleModal: () => this.showRoleModal(),
       sendMessage: (message: string) => {
         // ChatInput 컴포넌트로 전달하는 로직
-        console.log('Global sendMessage called:', message);
+        // console.log('Global sendMessage called:', message);
       }
     };
   }
