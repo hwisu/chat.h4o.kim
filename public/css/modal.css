@@ -1,0 +1,511 @@
+/* Modal animations and base styles */
+@keyframes modal-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes modal-scale-in {
+    from {
+        opacity: 0;
+        transform: scale(0.9) translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+/* Model selection modal */
+.model-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(4px);
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.model-modal.show {
+    display: flex;
+    animation: modal-fade-in 0.2s ease-out;
+}
+
+.model-modal-content {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 400px;
+    max-height: 70vh;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    animation: modal-scale-in 0.2s ease-out;
+}
+
+.model-modal-header {
+    padding: 20px;
+    border-bottom: 1px solid #333;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.model-modal-header h3 {
+    color: #00ff00;
+    font-size: 18px;
+    font-weight: 500;
+    margin: 0;
+}
+
+.model-modal-close {
+    background: none;
+    border: none;
+    color: #666;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+}
+
+.model-modal-close:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.model-list {
+    max-height: 50vh;
+    overflow-y: auto;
+    padding: 10px 0;
+}
+
+.model-list-loading {
+    text-align: center;
+    color: #666;
+    padding: 20px;
+}
+
+.model-item {
+    padding: 12px 20px;
+    color: #fff;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    transition: all 0.2s ease;
+    font-family: inherit;
+    font-size: 14px;
+    /* Enhanced touch support */
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: rgba(0, 255, 0, 0.2);
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    /* Ensure minimum touch target size */
+    min-height: 44px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.model-item:hover,
+.model-item:active {
+    background: rgba(0, 255, 0, 0.1);
+    color: #00ff88;
+}
+
+.model-item.selected {
+    background: rgba(0, 255, 0, 0.2);
+    color: #00ff00;
+    border-left: 3px solid #00ff00;
+}
+
+.model-item:last-child {
+    border-bottom: none;
+}
+
+.model-name {
+    font-weight: 500;
+    font-size: 14px;
+    line-height: 1.3;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    white-space: normal;
+}
+
+/* Role selection modal */
+.role-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(4px);
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.role-modal.show {
+    display: flex;
+    animation: modal-fade-in 0.2s ease-out;
+}
+
+.role-modal-content {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 500px;
+    max-height: 70vh;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    animation: modal-scale-in 0.2s ease-out;
+}
+
+.role-modal-header {
+    padding: 20px;
+    border-bottom: 1px solid #333;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.role-modal-header h3 {
+    color: #00ff00;
+    font-size: 18px;
+    font-weight: 500;
+    margin: 0;
+}
+
+.role-modal-close {
+    background: none;
+    border: none;
+    color: #666;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+}
+
+.role-modal-close:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.role-list {
+    max-height: 50vh;
+    overflow-y: auto;
+    padding: 10px 0;
+}
+
+.role-list-loading {
+    text-align: center;
+    color: #666;
+    padding: 20px;
+}
+
+.role-item {
+    padding: 12px 20px;
+    color: #fff;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    transition: all 0.2s ease;
+    font-family: inherit;
+    font-size: 14px;
+    /* Enhanced touch support */
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: rgba(0, 255, 0, 0.2);
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    /* Ensure minimum touch target size */
+    min-height: 44px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.role-item:hover,
+.role-item:active {
+    background: rgba(0, 255, 0, 0.1);
+    color: #00ff88;
+}
+
+.role-item.selected {
+    background: rgba(0, 255, 0, 0.2);
+    color: #00ff00;
+    border-left: 3px solid #00ff00;
+}
+
+.role-item:last-child {
+    border-bottom: none;
+}
+
+.role-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.role-icon {
+    margin-right: 8px;
+    font-size: 18px;
+}
+
+.role-name {
+    font-weight: bold;
+    color: #fff;
+    font-size: 14px;
+    line-height: 1.3;
+}
+
+.role-description {
+    font-size: 12px;
+    color: #aaa;
+    line-height: 1.4;
+    margin-top: 4px;
+}
+
+/* Modal responsive styles */
+@media (max-width: 768px) {
+    .model-modal-content {
+        width: 95%;
+        max-height: 80vh;
+        margin: 10px;
+    }
+
+    .model-modal-header {
+        padding: 16px;
+    }
+
+    .model-modal-header h3 {
+        font-size: 16px;
+    }
+
+    .model-modal-close {
+        width: 40px;
+        height: 40px;
+        font-size: 28px;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .model-item {
+        padding: 16px 20px;
+        font-size: 16px;
+        min-height: 60px;
+    }
+
+    .model-name {
+        font-size: 16px;
+    }
+
+    .model-list {
+        max-height: 60vh;
+    }
+
+    .role-modal-content {
+        width: 95%;
+        max-height: 80vh;
+        margin: 10px;
+    }
+
+    .role-modal-header {
+        padding: 16px;
+    }
+
+    .role-modal-header h3 {
+        font-size: 16px;
+    }
+
+    .role-modal-close {
+        width: 44px;
+        height: 44px;
+        font-size: 30px;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .role-item {
+        padding: 16px 20px;
+        font-size: 16px;
+        min-height: 60px;
+    }
+
+    .role-list {
+        max-height: 60vh;
+    }
+
+    .model-header {
+        gap: 6px;
+    }
+
+    .provider-badge {
+        font-size: 9px;
+        padding: 2px 4px;
+    }
+
+    .context-badge {
+        font-size: 9px;
+        padding: 2px 4px;
+    }
+}
+
+@media (max-width: 480px) {
+    .model-modal-content {
+        width: 98%;
+        margin: 5px;
+        border-radius: 8px;
+    }
+
+    .model-modal-header {
+        padding: 14px;
+    }
+
+    .model-item {
+        padding: 18px 16px;
+        min-height: 66px;
+    }
+
+    .model-name {
+        font-size: 17px;
+    }
+
+    .model-modal-close {
+        width: 44px;
+        height: 44px;
+        font-size: 30px;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .role-modal-content {
+        width: 98%;
+        margin: 5px;
+        border-radius: 8px;
+    }
+
+    .role-modal-header {
+        padding: 14px;
+    }
+
+    .role-item {
+        padding: 18px 16px;
+        min-height: 66px;
+    }
+
+    .role-modal-close {
+        width: 44px;
+        height: 44px;
+        font-size: 30px;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .model-header {
+        gap: 4px;
+    }
+
+    .provider-badge {
+        font-size: 8px;
+        padding: 1px 3px;
+    }
+
+    .context-badge {
+        font-size: 8px;
+        padding: 1px 3px;
+    }
+}
+
+/* Copy response button */
+.copy-response-button {
+    background: rgba(0, 0, 0, 0.7);
+    color: #ccc;
+    border: 1px solid #444;
+    border-radius: 3px;
+    padding: 4px 8px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', 'Courier New', monospace;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(4px);
+    text-transform: lowercase;
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+.copy-response-button:hover {
+    background: rgba(0, 0, 0, 0.9);
+    color: #00ff88;
+    border-color: #00ff88;
+    transform: scale(1.05);
+}
+
+.copy-response-button:active {
+    transform: scale(0.95);
+}
+
+.copy-response-button.copied {
+    background: rgba(0, 40, 0, 0.8);
+    color: #00ff88;
+    border-color: #00ff88;
+}
+
+/* Model item header with badges */
+.model-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+    gap: 8px;
+}
+
+.provider-badge {
+    font-size: 10px;
+    font-weight: bold;
+    color: #fff;
+    padding: 2px 6px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.5);
+    flex-shrink: 0;
+}
+
+.context-badge {
+    font-size: 10px;
+    font-weight: 500;
+    color: #aaa;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 2px 6px;
+    border-radius: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    flex-shrink: 0;
+}
+
+.model-item:hover .context-badge {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.model-item.selected .context-badge {
+    color: #00ff00;
+    background: rgba(0, 255, 0, 0.15);
+}

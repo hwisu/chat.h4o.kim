@@ -238,10 +238,19 @@ class TerminalChat {
                 if (response.ok) {
                     const data = await response.json();
                     if (data.models && Array.isArray(data.models)) {
-                        this.availableModels = data.models.map(model =>
-                            typeof model === 'string' ? model : model.id
-                        );
+                        // Store full model objects to preserve context_length and other info
+                        this.availableModels = data.models;
                         this.setStoredModels(this.availableModels);
+
+                        // Debug: Log context_length info for first few models
+                        if (this.availableModels.length > 0) {
+                            console.log('📊 Client received models context info (first 3):');
+                            this.availableModels.slice(0, 3).forEach(model => {
+                                const contextLength = typeof model === 'object' ? model.context_length : 'N/A';
+                                const modelId = typeof model === 'string' ? model : model.id;
+                                console.log(`  ${modelId}: ${contextLength || 'N/A'} tokens`);
+                            });
+                        }
 
                         this.updateModelTitle();
                         return;
@@ -868,7 +877,9 @@ class TerminalChat {
 
                     filteredModels.forEach((model, index) => {
                         const modelId = typeof model === 'string' ? model : model.id;
-                        modelList += `${index + 1}. ${modelId}\n`;
+                        const contextLength = typeof model === 'object' ? model.context_length : null;
+                        const contextDisplay = this.formatContextLength(contextLength);
+                        modelList += `${index + 1}. ${modelId} (${contextDisplay})\n`;
                     });
 
                     modelList += `\nUsage: /set-model <model-id> or /set-model auto`;
@@ -1120,9 +1131,14 @@ ${copyButton ? `<div class="message-footer">${copyButton}</div>` : ''}
     shortenModelName(modelName) {
         if (!modelName) return '';
 
-        // Remove common prefixes and make more readable
-        let shortened = modelName
-            .replace(/^(meta-llama\/|google\/|anthropic\/|openai\/|mistralai\/|microsoft\/|huggingfaceh4\/|nousresearch\/|teknium\/|gryphe\/|undi95\/|koboldai\/|pygmalionai\/|alpindale\/|jondurbin\/|neversleep\/|cognitivecomputations\/|lizpreciatior\/|migtissera\/|austism\/|xwin-lm\/|01-ai\/|togethercomputer\/|nvidia\/|intel\/|sambanova\/)/i, '')
+        // Remove provider prefix (everything before and including the '/')
+        let shortened = modelName;
+        if (modelName.includes('/')) {
+            shortened = modelName.split('/').slice(1).join('/');
+        }
+
+        // Clean up common suffixes and patterns
+        shortened = shortened
             .replace(/:free$/, '')
             .replace(/-instruct$/, '')
             .replace(/-chat$/, '')
@@ -1130,7 +1146,6 @@ ${copyButton ? `<div class="message-footer">${copyButton}</div>` : ''}
             .replace(/(\d+)b$/, '$1B')
             .replace(/(\d+)x(\d+)b$/, '$1×$2B');
 
-        // Return full name without truncation - allow wrapping to multiple lines
         return shortened;
     }
 
@@ -1170,6 +1185,7 @@ ${copyButton ? `<div class="message-footer">${copyButton}</div>` : ''}
 
         displayModels.forEach((model, index) => {
             const modelId = typeof model === 'string' ? model : model.id;
+            const contextLength = typeof model === 'object' ? model.context_length : null;
             const modelItem = document.createElement('div');
             modelItem.className = 'model-item';
 
@@ -1178,8 +1194,18 @@ ${copyButton ? `<div class="message-footer">${copyButton}</div>` : ''}
                 modelItem.classList.add('selected');
             }
 
+            // Get provider color for consistency
+            const providerColor = this.getProviderColor(modelId);
+            const provider = modelId.split('/')[0] || 'unknown';
+            const modelName = this.shortenModelName(modelId);
+            const contextDisplay = this.formatContextLength(contextLength);
+
             modelItem.innerHTML = `
-                <div class="model-name">${this.shortenModelName(modelId)}</div>
+                <div class="model-header">
+                    <div class="provider-badge" style="background-color: ${providerColor};">${provider}</div>
+                    <div class="context-badge">${contextDisplay}</div>
+                </div>
+                <div class="model-name">${modelName}</div>
             `;
 
             // Add both click and touch events for better mobile support
@@ -1224,47 +1250,19 @@ ${copyButton ? `<div class="message-footer">${copyButton}</div>` : ''}
                 context_length: modelInfo.context_length
             };
             this.maxContextSize = modelInfo.context_length;
+            console.log(`✅ Model context: ${modelName} = ${modelInfo.context_length} tokens`);
         } else {
-            // Fallback for models without context info or string-only models
+            // Fallback when no context info is available (use default 128k)
             this.selectedModelInfo = {
                 id: modelName,
-                context_length: this.getDefaultContextSize(modelName)
+                context_length: 128000
             };
-            this.maxContextSize = this.selectedModelInfo.context_length;
+            this.maxContextSize = 128000;
+            console.warn(`⚠️ Using fallback context for ${modelName}: 128000 tokens`);
         }
 
         // Update context display immediately
         this.updateContextDisplay();
-    }
-
-    // Get default context size based on model name patterns
-    getDefaultContextSize(modelName) {
-        if (!modelName) return 128000;
-
-        const name = modelName.toLowerCase();
-
-        // Known context sizes for popular models
-        if (name.includes('claude-3.5-sonnet')) return 200000;
-        if (name.includes('claude-3') && name.includes('haiku')) return 200000;
-        if (name.includes('claude-3') && name.includes('opus')) return 200000;
-        if (name.includes('claude-2')) return 100000;
-        if (name.includes('gpt-4o')) return 128000;
-        if (name.includes('gpt-4-turbo')) return 128000;
-        if (name.includes('gpt-4') && name.includes('32k')) return 32000;
-        if (name.includes('gpt-4')) return 8000;
-        if (name.includes('gpt-3.5-turbo-16k')) return 16000;
-        if (name.includes('gpt-3.5-turbo')) return 4000;
-        if (name.includes('llama-3.3') || name.includes('llama-3.2')) return 128000;
-        if (name.includes('llama-3.1')) return 128000;
-        if (name.includes('llama-3')) return 8000;
-        if (name.includes('llama-2')) return 4000;
-        if (name.includes('deepseek')) return 32000;
-        if (name.includes('gemini-1.5')) return 1000000; // 1M context
-        if (name.includes('gemini')) return 32000;
-        if (name.includes('gemma-2')) return 8000;
-
-        // Default fallback
-        return 128000;
     }
 
     // Update context display (서버에서 실제 관리, 클라이언트는 표시만)
@@ -1365,7 +1363,9 @@ ${copyButton ? `<div class="message-footer">${copyButton}</div>` : ''}
             let modelName = this.selectedModel;
             if (!modelName || modelName === 'auto') {
                 if (this.availableModels && this.availableModels.length > 0) {
-                    modelName = this.availableModels[0];
+                    // Extract model ID from first available model
+                    const firstModel = this.availableModels[0];
+                    modelName = typeof firstModel === 'string' ? firstModel : firstModel.id;
                 } else if (this.isAuthenticated || this.userApiKey) {
                     modelName = 'loading...';  // Show loading when authenticated but no models yet
                 } else {
@@ -1601,6 +1601,39 @@ ${copyButton ? `<div class="message-footer">${copyButton}</div>` : ''}
                // Check for common programming language keywords
                content.match(/\b(function|var|const|let|if|else|for|while|return|class|import|export)\b/);
     }
+
+    // Generate consistent color for provider based on provider name
+    getProviderColor(modelId) {
+        const provider = modelId.split('/')[0] || modelId;
+
+        // Simple hash function
+        let hash = 0;
+        for (let i = 0; i < provider.length; i++) {
+            const char = provider.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash; // Convert to 32-bit integer
+        }
+
+        // Convert hash to RGB values with good contrast
+        const r = Math.abs(hash) % 180 + 50; // 50-229 range for better visibility
+        const g = Math.abs(hash >> 8) % 180 + 50;
+        const b = Math.abs(hash >> 16) % 180 + 50;
+
+        return `rgb(${r}, ${g}, ${b})`;
+    }
+
+    // Format context length for display
+    formatContextLength(contextLength) {
+        if (!contextLength || contextLength === 0) return 'N/A';
+
+        if (contextLength >= 1000000) {
+            return `${(contextLength / 1000000).toFixed(1)}M`;
+        } else if (contextLength >= 1000) {
+            return `${Math.round(contextLength / 1000)}k`;
+        } else {
+            return contextLength.toString();
+        }
+    }
 }
 
 // Global function to copy message content only (not header or token usage)
@@ -1630,94 +1663,4 @@ function copyMessageContent(messageId) {
 // Initialize the terminal chat when the page loads
 document.addEventListener('DOMContentLoaded', () => {
     new TerminalChat();
-
-    // 토큰 사용량 표시를 위한 CSS 스타일 추가
-    const style = document.createElement('style');
-    style.textContent = `
-    .message-header {
-        text-align: left !important;
-        font-size: 11px;
-        color: #666;
-        margin-bottom: 8px;
-        font-family: 'JetBrains Mono', 'Courier New', monospace;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-
-    .assistant-message .message-header {
-        justify-content: space-between;
-    }
-
-    .user-message .message-header {
-        justify-content: space-between;
-    }
-
-    .message-footer {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-top: 8px;
-        width: 100%;
-    }
-
-    .token-usage-inline {
-        font-size: 11px;
-        color: #aaa;
-        opacity: 0.9;
-        background-color: rgba(0, 0, 0, 0.1);
-        padding: 4px 8px;
-        border-radius: 4px;
-        display: inline-block;
-        flex-shrink: 0;
-    }
-
-    .copy-response-button {
-        background: rgba(0, 0, 0, 0.7);
-        color: #ccc;
-        border: 1px solid #444;
-        border-radius: 3px;
-        padding: 4px 8px;
-        font-size: 11px;
-        font-family: 'JetBrains Mono', 'Courier New', monospace;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        backdrop-filter: blur(4px);
-        text-transform: lowercase;
-        flex-shrink: 0;
-        margin-left: auto;
-    }
-
-    .copy-response-button:hover {
-        background: rgba(0, 0, 0, 0.9);
-        color: #00ff88;
-        border-color: #00ff88;
-        transform: scale(1.05);
-    }
-
-    .copy-response-button:active {
-        transform: scale(0.95);
-    }
-
-    .copy-response-button.copied {
-        background: rgba(0, 40, 0, 0.8);
-        color: #00ff88;
-        border-color: #00ff88;
-    }
-
-    .token-usage-inline .token-prompt,
-    .token-usage-inline .token-completion {
-        display: inline-block;
-        margin: 0 3px;
-    }
-
-    .token-usage-inline .token-prompt {
-        color: #7fbf7f;
-    }
-
-    .token-usage-inline .token-completion {
-        color: #7f7fbf;
-    }
-    `;
-    document.head.appendChild(style);
 });

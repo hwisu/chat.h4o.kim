@@ -30,10 +30,15 @@ function getProviderPriority(modelId: string, isUserApiKey: boolean = false): nu
 }
 
 function getContextSize(model: OpenRouterModel): number {
-  // Try to get from model.context_length if available
-  if (model.context_length) return model.context_length;
+  // Always use the actual context_length from OpenRouter API if available
+  if (model.context_length && model.context_length > 0) {
+    return model.context_length;
+  }
 
-  // Estimate from model name patterns
+  // Log when fallback estimation is used
+  console.warn(`⚠️ Using context size estimation for model: ${model.id} (no context_length in API response)`);
+
+  // Fallback: Estimate from model name patterns only when API doesn't provide context_length
   const modelId = model.id.toLowerCase();
   if (modelId.includes('128k')) return 128000;
   if (modelId.includes('32k')) return 32000;
@@ -48,7 +53,8 @@ function getContextSize(model: OpenRouterModel): number {
   if (modelId.includes('gemini')) return 32000;
   if (modelId.includes('gemma-2')) return 8000;
 
-  return 4000; // Default
+  // Conservative default
+  return 4000;
 }
 
 // Helper function to format models response
@@ -296,6 +302,14 @@ models.get('/models', async (c) => {
         timestamp: Date.now(),
         type: cacheKey
       };
+
+      // Debug: Log context_length info for first few models
+      if (processedModels.length > 0) {
+        console.log(`📊 Models context info (first 3 models):`);
+        processedModels.slice(0, 3).forEach(model => {
+          console.log(`  ${model.id}: ${model.context_length || 'N/A'} tokens`);
+        });
+      }
 
       return c.json({
         success: true,

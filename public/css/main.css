@@ -1,6 +1,21 @@
 /* Main CSS file - imports all component styles */
+
+/* 1. Base styles and reset */
 @import url('./base.css');
+
+/* 2. Core layout and structure */
 @import url('./terminal-chat.css');
+
+/* 3. Component styles */
+@import url('./messages.css');
+@import url('./modal.css');
+
+/* 4. Content rendering */
 @import url('./markdown.css');
+@import url('./syntax-highlighting.css');
+
+/* 5. PWA features */
 @import url('./pwa.css');
+
+/* 6. Responsive overrides (must be last) */
 @import url('./responsive.css');
