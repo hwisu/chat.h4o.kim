@@ -102,8 +102,7 @@
 
 .chat-output {
     flex: 1;
-    padding: 20px;
-    padding-bottom: 140px;
+    padding: 20px 20px 140px 0;
     overflow-y: auto;
     font-size: 15px;
     line-height: 1.6;
@@ -244,6 +243,7 @@
 /* Message styles */
 .message {
     margin-bottom: 3vh;
+    margin-left: 8px;
     word-wrap: break-word;
     overflow-wrap: break-word;
     white-space: pre-wrap;
@@ -261,6 +261,7 @@
     font-size: 12px;
     margin-bottom: 6px;
     font-weight: 500;
+    text-align: left;
 }
 
 .message-content {
@@ -303,6 +304,7 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
+    margin-left: 8px;
 }
 
 .system-message .message-header {
@@ -316,11 +318,14 @@
     border-radius: 8px !important;
     padding: 12px 16px !important;
     max-width: 100% !important;
-    display: inline-block !important;
-    margin-right: auto !important;
+    display: block !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    text-align: left;
     word-wrap: break-word !important;
     white-space: pre-wrap !important;
     line-height: 1.5 !important;
+    width: 100% !important;
 }
 
 /* Special system message variants */
@@ -378,7 +383,7 @@
 
 .error-message .message-header {
     color: #cc4444;
-    text-align: left;
+    text-align: left !important;
 }
 
 .error-message .message-content {
@@ -728,4 +733,99 @@
     color: #aaa;
     line-height: 1.4;
     margin-top: 4px;
+}
+
+/* Add consistent styling for user messages with markdown content */
+.user-message .message-content pre.code-block {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 4px;
+    padding: 12px;
+    margin: 8px 0;
+    overflow-x: auto;
+    font-family: 'JetBrains Mono', 'Courier New', monospace;
+    font-size: 14px;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+.user-message .message-content code.inline-code {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 2px;
+    padding: 2px 4px;
+    font-family: 'JetBrains Mono', 'Courier New', monospace;
+    color: #00ff88;
+    font-size: 13px;
+}
+
+/* Add copy button for code blocks in user messages too */
+.user-message .message-content .code-container {
+    position: relative;
+    margin: 8px 0;
+}
+
+/* Apply consistent styling for other markdown elements in user messages */
+.user-message .message-content ol li::before,
+.user-message .message-content ul li::before {
+    color: #00ff00;
+}
+
+.user-message .message-content strong {
+    color: #00ff00;
+    font-weight: bold;
+}
+
+.user-message .message-content em {
+    color: #ffaa00;
+    font-style: italic;
+}
+
+/* Make sure highlighting works in user messages too */
+.user-message .message-content .hljs-keyword,
+.user-message .message-content .hljs-selector-tag,
+.user-message .message-content .hljs-literal,
+.user-message .message-content .hljs-section,
+.user-message .message-content .hljs-link {
+    color: #ff6b35 !important;
+}
+
+.user-message .message-content .hljs-string,
+.user-message .message-content .hljs-title,
+.user-message .message-content .hljs-name,
+.user-message .message-content .hljs-type,
+.user-message .message-content .hljs-attribute,
+.user-message .message-content .hljs-symbol,
+.user-message .message-content .hljs-bullet,
+.user-message .message-content .hljs-addition,
+.user-message .message-content .hljs-variable,
+.user-message .message-content .hljs-template-tag,
+.user-message .message-content .hljs-template-variable {
+    color: #00ff88 !important;
+}
+
+.user-message .message-content .hljs-comment,
+.user-message .message-content .hljs-quote,
+.user-message .message-content .hljs-deletion,
+.user-message .message-content .hljs-meta {
+    color: #666 !important;
+    font-style: italic;
+}
+
+.user-message .message-content .hljs-number,
+.user-message .message-content .hljs-regexp,
+.user-message .message-content .hljs-selector-id,
+.user-message .message-content .hljs-selector-class,
+.user-message .message-content .hljs-selector-pseudo {
+    color: #ffaa00 !important;
+}
+
+.user-message .message-content .hljs-function,
+.user-message .message-content .hljs-built_in,
+.user-message .message-content .hljs-builtin-name,
+.user-message .message-content .hljs-class,
+.user-message .message-content .hljs-title.class_ {
+    color: #00aaff !important;
 }

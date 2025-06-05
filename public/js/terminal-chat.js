@@ -115,6 +115,11 @@ class TerminalChat {
     }
 
     async initializeRolesBackground() {
+        // Only try to load roles if we have authentication
+        if (!this.isAuthenticated && !this.userApiKey) {
+            return; // Skip role loading if not authenticated
+        }
+
         try {
             await this.roleManager.loadRoles(this.userApiKey, this.sessionToken);
             this.updateRoleTitle();
@@ -592,15 +597,23 @@ class TerminalChat {
             });
 
             if (!response.ok) {
-                const errorData = await response.json();
+                let errorData;
+                try {
+                    errorData = await response.json();
+                } catch (parseError) {
+                    // If JSON parsing fails, create a fallback error data
+                    errorData = { error: `HTTP ${response.status}`, response: null };
+                }
 
                 if (response.status === 401) {
                     this.setAuthenticated(false);
-                    this.addMessage(errorData.response || '❌ Authentication required. Please login first.', 'error');
+                    const errorMessage = errorData?.response || errorData?.error || '❌ Authentication required. Please login first.';
+                    this.addMessage(errorMessage, 'error');
                     return;
                 }
 
-                throw new Error(errorData.error || `HTTP ${response.status}`);
+                const errorMessage = errorData?.error || errorData?.response || `HTTP ${response.status}`;
+                throw new Error(errorMessage);
             }
 
             const data = await response.json();
@@ -686,11 +699,15 @@ class TerminalChat {
                             this.availableModels = [];
                             localStorage.removeItem('cached-models');
 
-                            // Update authentication info from server
+                            // Update authentication info from server first
                             await this.updateAuthenticationInfo();
 
-                            // Load models with fresh authentication
+                            // Then load models and roles sequentially
                             await this.initializeModelsBackground();
+                            await this.initializeRolesBackground();
+
+                            // Update welcome message after everything is loaded
+                            this.updateWelcomeMessage();
 
                             this.addMessage(loginData.response, 'system');
                             success = true;
@@ -995,6 +1012,10 @@ class TerminalChat {
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${role}-message`;
 
+        // Generate a unique ID for this message
+        const messageId = 'msg-' + Math.random().toString(36).substr(2, 9);
+        messageDiv.id = messageId;
+
         let header = '';
         if (role === 'user') {
             header = `[USER] ${timestamp}`;
@@ -1009,27 +1030,55 @@ class TerminalChat {
             header = `[ERROR] ${timestamp}`;
         }
 
+        // Apply markdown rendering to both user and assistant messages, but not system or error messages
+        const shouldRenderMarkdown = role === 'assistant' || role === 'user';
+
+        // Create the message content first
+        const messageContent = shouldRenderMarkdown ? this.markdownParser.renderContent(content) : this.escapeHtml(content);
+
+        // Add copy button for both user and assistant messages (if they contain code blocks)
+        let copyButton = '';
+        if (shouldRenderMarkdown) {
+            // Check if content likely contains a code block
+            const hasCodeBlock = this.contentLikelyHasCodeBlock(content);
+
+            if (role === 'assistant' || hasCodeBlock) {
+                copyButton = `<button id="copy-response-${messageId}" class="copy-response-button" onclick="copyMessageContent('${messageId}')">copy all</button>`;
+            }
+        }
+
         messageDiv.innerHTML = `
-            <div class="message-header">${header}</div>
-            <div class="message-content">${role === 'assistant' ? this.markdownParser.renderContent(content) : this.escapeHtml(content)}</div>
+            <div class="message-header">
+${header}
+            </div>
+            <div class="message-content" id="content-${messageId}">${messageContent}</div>
+${copyButton ? `<div class="message-footer">${copyButton}</div>` : ''}
         `;
 
         // 토큰 사용량 표시 및 디버깅 (AI 응답 메시지에만)
         if (role === 'assistant') {
             console.log('Last usage data:', this.lastUsage);
 
-            // 토큰 사용량 정보가 있으면 표시
+            // 토큰 사용량 정보가 있으면 footer에 표시
             if (this.lastUsage && (this.lastUsage.prompt_tokens || this.lastUsage.completion_tokens)) {
-                const tokenInfo = document.createElement('div');
-                tokenInfo.className = 'token-usage';
-
-                // 입력 및 출력 토큰 수를 포맷팅
                 const promptTokens = this.formatTokenCount(this.lastUsage.prompt_tokens || 0);
                 const completionTokens = this.formatTokenCount(this.lastUsage.completion_tokens || 0);
 
-                tokenInfo.innerHTML = `<span class="token-prompt">↑ ${promptTokens}</span> <span class="token-completion">↓ ${completionTokens}</span>`;
-                messageDiv.appendChild(tokenInfo);
-                console.log('Token info added to message:', promptTokens, completionTokens);
+                const tokenUsage = `<span class="token-prompt">↑ ${promptTokens}</span> <span class="token-completion">↓ ${completionTokens}</span>`;
+
+                // footer가 있으면 토큰 정보를 왼쪽에 추가
+                const footer = messageDiv.querySelector('.message-footer');
+                if (footer) {
+                    footer.innerHTML = `<div class="token-usage-inline">${tokenUsage}</div>${footer.innerHTML}`;
+                } else {
+                    // footer가 없으면 토큰 정보만으로 footer 생성
+                    const tokenFooter = document.createElement('div');
+                    tokenFooter.className = 'message-footer';
+                    tokenFooter.innerHTML = `<div class="token-usage-inline">${tokenUsage}</div>`;
+                    messageDiv.appendChild(tokenFooter);
+                }
+
+                console.log('Token info added to footer:', promptTokens, completionTokens);
             } else {
                 console.log('No token usage data available for this message');
             }
@@ -1038,8 +1087,8 @@ class TerminalChat {
         this.output.appendChild(messageDiv);
         this.scrollToBottom();
 
-        // Syntax highlighting for code blocks if it's an assistant message
-        if (role === 'assistant' && typeof hljs !== 'undefined') {
+        // Syntax highlighting for code blocks for both user and assistant messages
+        if (shouldRenderMarkdown && typeof hljs !== 'undefined') {
             messageDiv.querySelectorAll('pre code').forEach((block) => {
                 hljs.highlightElement(block);
             });
@@ -1539,6 +1588,43 @@ class TerminalChat {
 
         return count.toString();
     }
+
+    // Helper function to detect if content likely contains a code block
+    contentLikelyHasCodeBlock(content) {
+        // Check for markdown code block syntax (```), or indented code blocks, or inline code (`)
+        return content.includes('```') ||
+               content.includes('    ') || // 4 spaces for indented code
+               (content.includes('`') && !content.includes('```')) ||
+               // Check for likely array/object notations
+               content.includes('[') && content.includes(']') ||
+               content.includes('{') && content.includes('}') ||
+               // Check for common programming language keywords
+               content.match(/\b(function|var|const|let|if|else|for|while|return|class|import|export)\b/);
+    }
+}
+
+// Global function to copy message content only (not header or token usage)
+function copyMessageContent(messageId) {
+    const contentElement = document.getElementById(`content-${messageId}`);
+    if (contentElement) {
+        // Get text content without formatting
+        const text = contentElement.textContent;
+        navigator.clipboard.writeText(text).then(() => {
+            // Visual feedback
+            const button = document.getElementById(`copy-response-${messageId}`);
+            if (button) {
+                const originalText = button.textContent;
+                button.textContent = 'copied!';
+                button.classList.add('copied');
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.classList.remove('copied');
+                }, 2000);
+            }
+        }).catch(err => {
+            console.error('Failed to copy message content:', err);
+        });
+    }
 }
 
 // Initialize the terminal chat when the page loads
@@ -1548,29 +1634,88 @@ document.addEventListener('DOMContentLoaded', () => {
     // 토큰 사용량 표시를 위한 CSS 스타일 추가
     const style = document.createElement('style');
     style.textContent = `
-    .token-usage {
+    .message-header {
+        text-align: left !important;
+        font-size: 11px;
+        color: #666;
+        margin-bottom: 8px;
+        font-family: 'JetBrains Mono', 'Courier New', monospace;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .assistant-message .message-header {
+        justify-content: space-between;
+    }
+
+    .user-message .message-header {
+        justify-content: space-between;
+    }
+
+    .message-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 8px;
+        width: 100%;
+    }
+
+    .token-usage-inline {
         font-size: 11px;
         color: #aaa;
-        margin-top: 8px;
-        text-align: right;
         opacity: 0.9;
         background-color: rgba(0, 0, 0, 0.1);
         padding: 4px 8px;
         border-radius: 4px;
         display: inline-block;
-        float: right;
+        flex-shrink: 0;
     }
 
-    .token-prompt, .token-completion {
+    .copy-response-button {
+        background: rgba(0, 0, 0, 0.7);
+        color: #ccc;
+        border: 1px solid #444;
+        border-radius: 3px;
+        padding: 4px 8px;
+        font-size: 11px;
+        font-family: 'JetBrains Mono', 'Courier New', monospace;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        backdrop-filter: blur(4px);
+        text-transform: lowercase;
+        flex-shrink: 0;
+        margin-left: auto;
+    }
+
+    .copy-response-button:hover {
+        background: rgba(0, 0, 0, 0.9);
+        color: #00ff88;
+        border-color: #00ff88;
+        transform: scale(1.05);
+    }
+
+    .copy-response-button:active {
+        transform: scale(0.95);
+    }
+
+    .copy-response-button.copied {
+        background: rgba(0, 40, 0, 0.8);
+        color: #00ff88;
+        border-color: #00ff88;
+    }
+
+    .token-usage-inline .token-prompt,
+    .token-usage-inline .token-completion {
         display: inline-block;
         margin: 0 3px;
     }
 
-    .token-prompt {
+    .token-usage-inline .token-prompt {
         color: #7fbf7f;
     }
 
-    .token-completion {
+    .token-usage-inline .token-completion {
         color: #7f7fbf;
     }
     `;

@@ -74,6 +74,19 @@ class MarkdownParser {
                 return `<code class="inline-code">${this.escapeHtml(code)}</code>`;
             };
 
+            // Fix for ordered lists - ensure proper numbering for nested lists and large numbers
+            renderer.listitem = (text) => {
+                return `<li>${text}</li>`;
+            };
+
+            // Custom ordered list renderer to fix numbering issues
+            renderer.list = (body, ordered, start) => {
+                const type = ordered ? 'ol' : 'ul';
+                const startAttr = ordered && start !== 1 ? ` start="${start}"` : '';
+                const className = ordered ? 'md-ordered-list' : '';
+                return `<${type}${startAttr} class="md-list ${className}">${body}</${type}>`;
+            };
+
             marked.setOptions({
                 breaks: true,
                 gfm: true,
@@ -118,6 +131,9 @@ class MarkdownParser {
                         // Silent fallback on error
                     }
                 });
+
+                // Fix any nested ordered lists and numbering
+                this.fixOrderedLists(tempDiv);
 
                 return tempDiv.innerHTML;
             }
@@ -181,6 +197,38 @@ class MarkdownParser {
             return this.parse(content);
         }
     }
+
+    // Fix ordered list numbering and nested list display
+    fixOrderedLists(element) {
+        // Fix alignment for large numbered lists (10+ items)
+        const orderedLists = element.querySelectorAll('ol');
+        orderedLists.forEach(ol => {
+            // Count the number of items
+            const items = ol.querySelectorAll(':scope > li').length;
+            if (items >= 10) {
+                ol.classList.add('large-list');
+            }
+            if (items >= 100) {
+                ol.classList.add('very-large-list');
+            }
+
+            // Get the depth level of this list (how nested it is)
+            let nestLevel = 0;
+            let parent = ol.parentElement;
+            while (parent) {
+                if (parent.tagName === 'LI' && parent.parentElement &&
+                    (parent.parentElement.tagName === 'OL' || parent.parentElement.tagName === 'UL')) {
+                    nestLevel++;
+                }
+                parent = parent.parentElement;
+            }
+
+            // Add appropriate nesting class
+            if (nestLevel > 0) {
+                ol.classList.add(`nested-list-level-${nestLevel}`);
+            }
+        });
+    }
 }
 
 // Global function to copy code block content
@@ -202,6 +250,30 @@ function copyCodeToClipboard(codeId) {
             }
         }).catch(err => {
             console.error('Failed to copy code:', err);
+        });
+    }
+}
+
+// Global function to copy entire response
+function copyEntireResponse(responseId) {
+    const responseElement = document.getElementById(responseId);
+    if (responseElement) {
+        // Get text content without formatting
+        const text = responseElement.textContent;
+        navigator.clipboard.writeText(text).then(() => {
+            // Visual feedback
+            const button = document.getElementById(`copy-response-${responseId}`);
+            if (button) {
+                const originalText = button.textContent;
+                button.textContent = 'copied!';
+                button.classList.add('copied');
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.classList.remove('copied');
+                }, 2000);
+            }
+        }).catch(err => {
+            console.error('Failed to copy response:', err);
         });
     }
 }
