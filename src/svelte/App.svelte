@@ -1,89 +1,56 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import Header from './components/Header.svelte';
   import ChatArea from './components/ChatArea.svelte';
   import ChatInput from './components/ChatInput.svelte';
   import AuthModal from './components/AuthModal.svelte';
   import ModelModal from './components/ModelModal.svelte';
   import RoleModal from './components/RoleModal.svelte';
-  import { 
-    authStore, 
-    modelsStore, 
-    rolesStore, 
-    messagesStore, 
-    uiStore 
-  } from './stores';
-  import { apiClient } from './services/api';
-  import { initializeApp } from './services/app';
+  import { appStateManager } from './services/appState';
 
-  // UI 상태
-  let showAuthModal = $state(false);
-  let showModelModal = $state(false);
-  let showRoleModal = $state(false);
+  // 모달 상태 관리
+  let modalState = $state({
+    showAuthModal: false,
+    showModelModal: false,
+    showRoleModal: false
+  });
+
+  let unsubscribeModals: (() => void) | null = null;
 
   onMount(async () => {
     // 앱 초기화
-    await initializeApp();
+    await appStateManager.initialize();
     
-    // 전역 window 객체에 Svelte 앱 등록 (기존 코드와의 호환성)
-    (window as any).svelteApp = {
-      // 외부에서 사용할 수 있는 메서드들
-      showAuthModal: () => showAuthModal = true,
-      showModelModal: () => showModelModal = true,
-      showRoleModal: () => showRoleModal = true,
-      sendMessage: (message) => {
-        // ChatInput 컴포넌트로 전달
-      }
-    };
+    // 모달 상태 구독
+    unsubscribeModals = appStateManager.subscribeToModals((state) => {
+      modalState = { ...state };
+    });
   });
 
-  // 모달 이벤트 핸들러
-  function handleAuthSuccess(event) {
-    showAuthModal = false;
-    // 인증 성공 후 모델/역할 로드
-    initializeApp();
-  }
-
-  function handleModelSelect(event) {
-    showModelModal = false;
-    // 선택된 모델 설정
-  }
-
-  function handleRoleSelect(event) {
-    showRoleModal = false;
-    // 선택된 역할 설정
-  }
-
-  function handleScrollToBottom() {
-    // ChatArea에게 스크롤 요청
-    const chatArea = document.querySelector('.chat-area');
-    if (chatArea) {
-      chatArea.scrollTop = chatArea.scrollHeight;
+  onDestroy(() => {
+    if (unsubscribeModals) {
+      unsubscribeModals();
     }
-  }
+  });
 
-  // 헤더 클릭 이벤트
-  function onModelClick() {
-    if ($authStore.isAuthenticated) {
-      showModelModal = true;
-    } else {
-      showAuthModal = true;
-    }
-  }
-
-  function onRoleClick() {
-    if ($authStore.isAuthenticated) {
-      showRoleModal = true;
-    } else {
-      showAuthModal = true;
-    }
-  }
+  // 이벤트 핸들러들 - AppStateManager에 위임
+  const handleModelClick = () => appStateManager.handleModelClick();
+  const handleRoleClick = () => appStateManager.handleRoleClick();
+  const handleAuthSuccess = () => appStateManager.handleAuthSuccess();
+  const handleModelSelect = () => appStateManager.handleModelSelect();
+  const handleRoleSelect = () => appStateManager.handleRoleSelect();
+  const handleScrollToBottom = () => appStateManager.handleScrollToBottom();
+  
+  // 모달 닫기 핸들러들
+  const closeAuthModal = () => appStateManager.hideAuthModal();
+  const closeModelModal = () => appStateManager.hideModelModal();
+  const closeRoleModal = () => appStateManager.hideRoleModal();
 </script>
 
 <div class="app">
   <Header 
-    onModelClick={onModelClick}
-    onRoleClick={onRoleClick}
+    onModelClick={handleModelClick}
+    onRoleClick={handleRoleClick}
   />
   
   <ChatArea />
@@ -91,23 +58,23 @@
   <ChatInput onScrollToBottom={handleScrollToBottom} />
 
   <!-- 모달들 -->
-  {#if showAuthModal}
+  {#if modalState.showAuthModal}
     <AuthModal 
-      onClose={() => showAuthModal = false}
+      onClose={closeAuthModal}
       onSuccess={handleAuthSuccess}
     />
   {/if}
 
-  {#if showModelModal}
+  {#if modalState.showModelModal}
     <ModelModal 
-      onClose={() => showModelModal = false}
+      onClose={closeModelModal}
       onSelect={handleModelSelect}
     />
   {/if}
 
-  {#if showRoleModal}
+  {#if modalState.showRoleModal}
     <RoleModal 
-      onClose={() => showRoleModal = false}
+      onClose={closeRoleModal}
       onSelect={handleRoleSelect}
     />
   {/if}

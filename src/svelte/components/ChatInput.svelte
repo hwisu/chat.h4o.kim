@@ -1,8 +1,6 @@
 <script lang="ts">
-  import { messagesStore, uiStore } from '../stores.js';
-  import { apiClient } from '../services/api.js';
-  import { addMessage, setError } from '../stores.js';
-  import { initializeApp } from '../services/app.js';
+  import { messagesState, uiState } from '../stores/index.js';
+  import { chatService } from '../services/chatService.js';
 
   // Svelte 5 props 시스템 사용
   let { onScrollToBottom } = $props();
@@ -12,89 +10,17 @@
 
   async function send() {
     const content = message.trim();
-    if (!content || $uiStore.isLoading) return;
+    if (!content || uiState.isLoading) return;
 
-    try {
-      // 사용자 메시지 추가
-      addMessage({
-        role: 'user',
-        content: content,
-        timestamp: Date.now()
-      });
+    // 입력 초기화
+    message = '';
+    adjustTextareaHeight();
 
-      // UI 상태 업데이트
-      uiStore.update(state => ({ ...state, isLoading: true }));
-      
-      // 입력 초기화
-      message = '';
-      adjustTextareaHeight();
+    // 스크롤 바닥으로
+    onScrollToBottom?.();
 
-      // 스크롤 바닥으로
-      onScrollToBottom?.();
-
-      // 로그인 명령어 처리
-      if (content.startsWith('/login ')) {
-        const password = content.substring(7).trim();
-        const result = await apiClient.login(password);
-        
-        if (result.success) {
-          // 성공 메시지 추가
-          addMessage({
-            role: 'system',
-            content: result.data.message || 'Login successful',
-            timestamp: Date.now(),
-            type: 'success'
-          });
-          
-          // 인증 상태 업데이트
-          await initializeApp();
-        } else {
-          // 에러 메시지 추가  
-          addMessage({
-            role: 'system',
-            content: result.error || 'Login failed',
-            timestamp: Date.now(),
-            type: 'error'
-          });
-        }
-      } else {
-        // 일반 채팅 메시지 처리
-        const result = await apiClient.sendMessage(content);
-
-        if (result.success && result.data) {
-          // AI 응답 추가
-          if (result.data.response) {
-            console.log('Token usage from API:', result.data.usage);
-            addMessage({
-              role: 'assistant',
-              content: result.data.response,
-              timestamp: Date.now(),
-              model: result.data.model,
-              tokenUsage: result.data.usage || {}
-            });
-          }
-        } else {
-          // 에러 메시지를 시스템 메시지로 추가
-          addMessage({
-            role: 'system',
-            content: result.error || 'Failed to send message',
-            timestamp: Date.now(),
-            type: 'error'
-          });
-        }
-      }
-    } catch (error) {
-      console.error('Error sending message:', error);
-      // 에러 메시지를 시스템 메시지로 추가
-      addMessage({
-        role: 'system',
-        content: 'Failed to send message: ' + error.message,
-        timestamp: Date.now(),
-        type: 'error'
-      });
-    } finally {
-      uiStore.update(state => ({ ...state, isLoading: false }));
-    }
+    // ChatService에 메시지 전송 위임
+    await chatService.sendMessage(content);
   }
 
   function handleKeydown(e) {
@@ -137,17 +63,17 @@
       placeholder="Type your message..."
       oninput={handleInput}
       onkeydown={handleKeydown}
-      disabled={$uiStore.isLoading}
+      disabled={uiState.isLoading}
       aria-label="Chat message input"
     ></textarea>
     
     <button 
-      class="send-button {!message.trim() || $uiStore.isLoading ? 'disabled' : ''}" 
+      class="send-button {!message.trim() || uiState.isLoading ? 'disabled' : ''}" 
       onclick={send} 
-      disabled={!message.trim() || $uiStore.isLoading}
+      disabled={!message.trim() || uiState.isLoading}
       aria-label="Send message"
     >
-      {#if $uiStore.isLoading}
+      {#if uiState.isLoading}
         <div class="loading-spinner"></div>
       {:else}
         <span class="send-icon">↑</span>
@@ -155,7 +81,7 @@
     </button>
   </div>
   
-  {#if $messagesStore.length === 0}
+  {#if messagesState.length === 0}
     <div class="input-hint">
       Press Enter to send, Shift+Enter for new line
     </div>

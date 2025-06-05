@@ -1,118 +1,24 @@
-import { writable } from 'svelte/store';
+// 이 파일은 기존 코드와의 호환성을 위해 유지됩니다.
+// 새로운 TypeScript 스토어들로 포워딩합니다.
 
-// 인증 스토어
-export const authStore = writable({
-  isAuthenticated: false,
-  status: 'Authentication required',
-  method: null, // 'server' or 'api-key'
-  userApiKey: null,
-  sessionToken: null
-});
+// 새로운 TypeScript 스토어들에서 가져오기
+export {
+  authStore,
+  modelsStore,
+  messagesStore,
+  uiStore,
+  rolesStore,
+  contextStore,
+  updateAuth,
+  updateModels,
+  updateRoles,
+  updateContext,
+  addMessage,
+  clearMessages,
+  setError,
+  clearError,
+  setLoading
+} from './stores/index.js';
 
-// 모델 스토어
-export const modelsStore = writable({
-  available: [],
-  selected: null,
-  selectedInfo: {
-    name: 'whoami',
-    provider: '',
-    contextSize: 128000
-  },
-  isLoading: false
-});
-
-// 역할 스토어
-export const rolesStore = writable({
-  available: [],
-  selected: null,
-  selectedInfo: {
-    name: '🤖 General Assistant',
-    description: 'General purpose AI assistant'
-  },
-  isLoading: false
-});
-
-// 메시지 스토어
-export const messagesStore = writable([]);
-
-// 컨텍스트 스토어
-export const contextStore = writable({
-  usage: '--',
-  maxSize: 128000,
-  currentSize: 0,
-  percentage: 0,
-  lastTokenUsage: null
-});
-
-// UI 상태 스토어
-export const uiStore = writable({
-  isLoading: false,
-  currentView: 'chat', // 'chat', 'settings', etc.
-  error: null,
-  showSystemMessage: true
-});
-
-// 앱 상태 스토어
-export const appStore = writable({
-  isInitialized: false,
-  version: '1.0.0',
-  lastUpdate: null
-});
-
-// 스토어 업데이트 헬퍼 함수들
-export function updateAuth(authData) {
-  authStore.update(current => ({
-    ...current,
-    ...authData
-  }));
-}
-
-export function updateModels(modelsData) {
-  modelsStore.update(current => ({
-    ...current,
-    ...modelsData
-  }));
-}
-
-export function updateRoles(rolesData) {
-  rolesStore.update(current => ({
-    ...current,
-    ...rolesData
-  }));
-}
-
-export function addMessage(message) {
-  messagesStore.update(messages => [...messages, message]);
-}
-
-export function clearMessages() {
-  messagesStore.set([]);
-}
-
-export function updateContext(contextData) {
-  contextStore.update(current => ({
-    ...current,
-    ...contextData
-  }));
-}
-
-export function setError(error) {
-  uiStore.update(current => ({
-    ...current,
-    error
-  }));
-}
-
-export function clearError() {
-  uiStore.update(current => ({
-    ...current,
-    error: null
-  }));
-}
-
-export function setLoading(isLoading) {
-  uiStore.update(current => ({
-    ...current,
-    isLoading
-  }));
-} 
+// 기존 코드에서 사용하던 방식으로도 접근 가능하도록 유지
+console.warn('Warning: stores.js is deprecated. Please use individual store imports from ./stores/ directory.'); 

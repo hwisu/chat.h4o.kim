@@ -3,9 +3,6 @@ name: Deploy to Cloudflare Workers
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
-  workflow_dispatch:
 
 jobs:
   deploy:
@@ -15,8 +12,6 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v4
-      with:
-        fetch-depth: 0  # Fetch full history for git hash
 
     - name: Setup Node.js
       uses: actions/setup-node@v4
