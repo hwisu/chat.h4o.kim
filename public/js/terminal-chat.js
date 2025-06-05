@@ -1,4 +1,40 @@
 // Main Terminal Chat functionality
+// Import required modules
+import {
+    formatContextLength,
+    shortenModelName,
+    getProviderColor,
+} from './format.utils.js';
+
+import { simpleEncrypt, simpleDecrypt } from './encryption.utils.js';
+
+import {
+    getIOSVersion,
+    scrollToBottom,
+    autoResizeTextarea,
+    setupIOS18Compatibility,
+    setupViewportFix,
+    setupEnhancedKeyboardHandling,
+    handleViewportResize,
+    setupViewportChangeHandlers,
+    copyMessageContent
+} from './ui.utils.js';
+
+import {
+    getStoredUserApiKey,
+    setStoredUserApiKey,
+    updateAuthStatus,
+    updateAuthenticationInfo
+} from './auth.utils.js';
+
+import { createApiClient } from './api.client.js';
+import { MarkdownParser } from './markdown.js';
+import { RoleManager } from './role-manager.js';
+import { MessageRenderer } from './message.utils.js';
+
+// copyMessageContent 함수를 전역에 등록 (HTML onclick에서 사용하기 위함)
+window.copyMessageContent = copyMessageContent;
+
 class TerminalChat {
     constructor() {
         this.output = document.getElementById('output');
@@ -34,13 +70,17 @@ class TerminalChat {
         this.authMethod = null;
         this.authType = null;
 
-        // iOS 18 compatibility flags
+        // iOS 호환성을 위한 플래그
         this.isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-        this.isIOS18Plus = this.isIOS && this.getIOSVersion() >= 18;
+        this.isIOS18Plus = this.isIOS && getIOSVersion() >= 18;
         this.supportsVisualViewport = 'visualViewport' in window;
 
         // Initialize modules
         this.markdownParser = new MarkdownParser();
+        this.messageRenderer = new MessageRenderer(this.markdownParser);
+
+        // API client for server communication
+        this.apiClient = createApiClient(this.userApiKey, this.sessionToken);
 
         // Role management
         this.roleManager = new RoleManager();
@@ -50,13 +90,35 @@ class TerminalChat {
         this.roleTitle = document.getElementById('roleTitle');
         this.roleList = document.getElementById('roleList');
 
-        this.init();
-    }
+        // RoleManager UI 초기화
+        this.roleManager.initializeUI({
+            roleModal: this.roleModal,
+            roleModalClose: this.roleModalClose,
+            roleTitle: this.roleTitle,
+            roleList: this.roleList,
+            messageRenderer: this.messageRenderer,
+            output: this.output
+        });
 
-    // iOS version detection for compatibility
-    getIOSVersion() {
-        const match = navigator.userAgent.match(/OS (\d+)_/);
-        return match ? parseInt(match[1]) : 0;
+        // API 클라이언트 설정
+        this.roleManager.setApiClient(this.apiClient);
+
+        // 역할 타이틀 클릭 이벤트 재설정 (인증 상태를 전달하기 위해)
+        if (this.roleTitle) {
+            // 기존 이벤트 리스너 제거 (RoleManager에서 추가한 것)
+            this.roleTitle.replaceWith(this.roleTitle.cloneNode(true));
+            // 새로운 참조 획득
+            this.roleTitle = document.getElementById('roleTitle');
+            // RoleManager에도 새 참조 설정
+            this.roleManager.roleTitle = this.roleTitle;
+            // 새 이벤트 리스너 추가
+            this.roleTitle.addEventListener('click', () => {
+                this.showRoleModal();
+            });
+            this.roleTitle.style.cursor = 'pointer';
+        }
+
+        this.init();
     }
 
     init() {
@@ -73,7 +135,8 @@ class TerminalChat {
 
         // Initialize basic state from localStorage (but verify with server)
         this.selectedModel = this.getStoredModel();
-        this.userApiKey = this.getStoredUserApiKey();
+        // 인증 관련 함수 대체
+        this.userApiKey = getStoredUserApiKey(this.encryptionKey);
 
         // Restore session token if available
         this.sessionToken = sessionStorage.getItem('session_token');
@@ -82,15 +145,27 @@ class TerminalChat {
         this.updateModelTitle();
         this.setupEventListeners();
         this.updateSendButton();
-        this.autoResizeTextarea();
+        autoResizeTextarea(this.input);
 
         if (this.input) {
             this.input.focus();
         }
 
-        // iOS 18 specific initialization
+        // iOS 18 호환성 설정 - ui.utils.js의 함수들을 활용하여 단순화
         if (this.isIOS18Plus) {
-            this.setupIOS18Compatibility();
+            setupIOS18Compatibility(
+                this.isIOS18Plus,
+                setupViewportFix,
+                () => {
+                    setupEnhancedKeyboardHandling(
+                        this.supportsVisualViewport,
+                        () => handleViewportResize(() => scrollToBottom(this.output)),
+                        this.isIOS18Plus,
+                        () => scrollToBottom(this.output),
+                        this.input
+                    );
+                }
+            );
         }
 
         // Immediately verify authentication with server and initialize everything
@@ -121,78 +196,15 @@ class TerminalChat {
         }
 
         try {
-            await this.roleManager.loadRoles(this.userApiKey, this.sessionToken);
-            this.updateRoleTitle();
+            // API 클라이언트 업데이트
+            this.updateApiCredentials();
+
+            // 역할 매니저에 API 클라이언트 다시 설정 (인증 정보가 변경되었을 수 있음)
+            this.roleManager.setApiClient(this.apiClient);
+
+            await this.roleManager.loadRoles();
         } catch (error) {
             console.warn('Background role initialization failed:', error);
-        }
-    }
-
-    // iOS 18 specific setup
-    setupIOS18Compatibility() {
-        // Enhanced touch handling for iOS 18
-        if ('ontouchstart' in window) {
-            document.addEventListener('touchstart', () => {}, { passive: true });
-        }
-
-        // iOS 18 viewport height fix
-        this.setupViewportFix();
-
-        // Enhanced keyboard handling
-        this.setupEnhancedKeyboardHandling();
-    }
-
-    setupViewportFix() {
-        // iOS 18 viewport units fix
-        const setViewportHeight = () => {
-            const vh = window.innerHeight * 0.01;
-            document.documentElement.style.setProperty('--vh', `${vh}px`);
-
-            // Use dynamic viewport units if supported
-            if (CSS.supports('height', '100dvh')) {
-                document.documentElement.style.setProperty('--real-vh', '100dvh');
-            } else {
-                document.documentElement.style.setProperty('--real-vh', `${window.innerHeight}px`);
-            }
-        };
-
-        setViewportHeight();
-        window.addEventListener('resize', setViewportHeight);
-        window.addEventListener('orientationchange', () => {
-            setTimeout(setViewportHeight, 100);
-        });
-    }
-
-    setupEnhancedKeyboardHandling() {
-        if (this.supportsVisualViewport) {
-            window.visualViewport.addEventListener('resize', () => {
-                this.handleViewportResize();
-            });
-        }
-
-        // iOS 18 enhanced input focus handling
-        this.input.addEventListener('focusin', () => {
-            if (this.isIOS18Plus) {
-                setTimeout(() => {
-                    this.scrollToBottom();
-                }, 300);
-            }
-        });
-    }
-
-    handleViewportResize() {
-        const viewportHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-        const isKeyboardOpen = viewportHeight < window.innerHeight;
-
-        if (isKeyboardOpen) {
-            // Keyboard is open
-            document.body.classList.add('keyboard-open');
-            setTimeout(() => {
-                this.scrollToBottom();
-            }, 100);
-        } else {
-            // Keyboard is closed
-            document.body.classList.remove('keyboard-open');
         }
     }
 
@@ -214,47 +226,35 @@ class TerminalChat {
         // Try to fetch fresh models from server if authenticated
         if (this.isAuthenticated || this.userApiKey) {
             try {
-                // Prepare headers with authentication
-                const headers = { 'Content-Type': 'application/json' };
-                if (this.userApiKey) {
-                    headers['X-User-API-Key'] = this.userApiKey;
-                }
-                if (this.sessionToken) {
-                    headers['X-Session-Token'] = this.sessionToken;
-                }
+                // Update API client credentials
+                this.updateApiCredentials();
 
-                const response = await fetch('/api/models', {
-                    method: 'GET',
-                    headers: headers
-                });
+                const result = await this.apiClient.getModels();
 
-                if (response.status === 401) {
+                if (result.status === 401) {
                     // Authentication failed - clear auth state and use cache
                     this.setAuthenticated(false);
                     this.availableModels = this.getStoredModels();
                     return;
                 }
 
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.models && Array.isArray(data.models)) {
-                        // Store full model objects to preserve context_length and other info
-                        this.availableModels = data.models;
-                        this.setStoredModels(this.availableModels);
+                if (result.success && result.models && Array.isArray(result.models)) {
+                    // Store full model objects to preserve context_length and other info
+                    this.availableModels = result.models;
+                    this.setStoredModels(this.availableModels);
 
-                        // Debug: Log context_length info for first few models
-                        if (this.availableModels.length > 0) {
-                            console.log('📊 Client received models context info (first 3):');
-                            this.availableModels.slice(0, 3).forEach(model => {
-                                const contextLength = typeof model === 'object' ? model.context_length : 'N/A';
-                                const modelId = typeof model === 'string' ? model : model.id;
-                                console.log(`  ${modelId}: ${contextLength || 'N/A'} tokens`);
-                            });
-                        }
-
-                        this.updateModelTitle();
-                        return;
+                    // Debug: Log context_length info for first few models
+                    if (this.availableModels.length > 0) {
+                        console.log('📊 Client received models context info (first 3):');
+                        this.availableModels.slice(0, 3).forEach(model => {
+                            const contextLength = typeof model === 'object' ? model.context_length : 'N/A';
+                            const modelId = typeof model === 'string' ? model : model.id;
+                            console.log(`  ${modelId}: ${contextLength || 'N/A'} tokens`);
+                        });
                     }
+
+                    this.updateModelTitle();
+                    return;
                 }
             } catch (error) {
                 console.warn('Failed to fetch fresh models:', error);
@@ -269,28 +269,13 @@ class TerminalChat {
 
     async setModelAuto() {
         try {
-            // Prepare headers with user API key if available
-            const headers = { 'Content-Type': 'application/json' };
-            if (this.userApiKey) {
-                headers['X-User-API-Key'] = this.userApiKey;
-            }
-            if (this.sessionToken) {
-                headers['X-Session-Token'] = this.sessionToken;
-            }
+            this.updateApiCredentials();
+            const result = await this.apiClient.setModel('auto');
 
-            const response = await fetch('/api/set-model', {
-                method: 'POST',
-                headers: headers,
-                body: JSON.stringify({ model: 'auto' })
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                if (data.success) {
-                    this.selectedModel = 'auto';
-                    localStorage.setItem('selected-model', 'auto');
-                    this.updateModelTitle();
-                }
+            if (result.success) {
+                this.selectedModel = 'auto';
+                localStorage.setItem('selected-model', 'auto');
+                this.updateModelTitle();
             }
         } catch (error) {
             console.warn('Failed to set auto model:', error);
@@ -332,7 +317,7 @@ class TerminalChat {
 
         if (!this.isAuthenticated && !this.userApiKey) {
             // Show options for authentication OR API key
-            this.addSystemMessage(`🔐 Choose access method:\n\n📡 Server Login: /login <password>\n🔑 Personal Key: /set-api-key <key>\n\n💡 Choose ONE option`, 'auth-required-message');
+            this.messageRenderer.addSystemMessage(`🔐 Choose access method:\n\n📡 Server Login: /login <password>\n🔑 Personal Key: /set-api-key <key>\n\n💡 Choose ONE option`, this.output, 'auth-required-message');
             return;
         }
 
@@ -344,12 +329,19 @@ class TerminalChat {
             accessMethod = '📡 Server Key';
         }
 
-        this.addSystemMessage(`✅ Welcome to Chatty!\n\n${accessMethod}\n\n💬 Start chatting or type /help for commands`, 'welcome-message');
+        this.messageRenderer.addSystemMessage(`✅ Welcome to Chatty!\n\n${accessMethod}\n\n💬 Start chatting or type /help for commands`, this.output, 'welcome-message');
     }
 
     setAuthenticated(authenticated) {
         this.isAuthenticated = authenticated;
-        this.updateAuthStatus();
+        updateAuthStatus(
+            { statusIndicator: this.statusIndicator, authStatus: this.authStatus },
+            this.isAuthenticated,
+            this.userApiKey
+        );
+
+        // API 클라이언트 업데이트
+        this.updateApiCredentials();
 
         // 인증 상태 변경 후 즉시 모델 목록 갱신
         if (authenticated) {
@@ -394,7 +386,7 @@ class TerminalChat {
         });
 
         this.input.addEventListener('input', () => {
-            this.autoResizeTextarea();
+            autoResizeTextarea(this.input);
             this.updateSendButton();
         });
 
@@ -402,7 +394,13 @@ class TerminalChat {
         this.setupSendButtonEvents();
 
         this.input.focus();
-        this.handleViewportChanges();
+        setupViewportChangeHandlers(
+            this.supportsVisualViewport,
+            () => scrollToBottom(this.output),
+            this.isIOS18Plus,
+            this.input,
+            () => setupViewportFix()
+        );
 
         // Model modal event listeners
         if (this.modelModalClose) {
@@ -445,56 +443,6 @@ class TerminalChat {
                 this.hideModelModal();
             }
         });
-
-        // Role title click handler for showing role selection modal
-        const roleTitle = document.getElementById('roleTitle');
-        if (roleTitle) {
-            roleTitle.addEventListener('click', () => {
-                this.showRoleModal();
-            });
-            roleTitle.style.cursor = 'pointer';
-        }
-
-        // Role modal event listeners
-        if (this.roleModalClose) {
-            this.roleModalClose.addEventListener('click', () => {
-                this.hideRoleModal();
-            });
-        }
-
-        if (this.roleModal) {
-            // Enhanced backdrop click handling for mobile
-            const handleBackdropClick = (e) => {
-                if (e.target === this.roleModal) {
-                    this.hideRoleModal();
-                }
-            };
-
-            this.roleModal.addEventListener('click', handleBackdropClick);
-
-            // Add touch support for backdrop
-            if ('ontouchstart' in window) {
-                let touchStartTarget = null;
-
-                this.roleModal.addEventListener('touchstart', (e) => {
-                    touchStartTarget = e.target;
-                }, { passive: true });
-
-                this.roleModal.addEventListener('touchend', (e) => {
-                    if (touchStartTarget === this.roleModal && e.target === this.roleModal) {
-                        this.hideRoleModal();
-                    }
-                    touchStartTarget = null;
-                }, { passive: true });
-            }
-        }
-
-        // ESC key to close role modal
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && this.roleModal && this.roleModal.classList.contains('show')) {
-                this.hideRoleModal();
-            }
-        });
     }
 
     setupSendButtonEvents() {
@@ -524,41 +472,6 @@ class TerminalChat {
         }
     }
 
-    handleViewportChanges() {
-        const ensureScrollToBottom = () => {
-            setTimeout(() => {
-                this.scrollToBottom();
-            }, 100);
-        };
-
-        if (this.supportsVisualViewport) {
-            window.visualViewport.addEventListener('resize', ensureScrollToBottom);
-        }
-
-        window.addEventListener('resize', ensureScrollToBottom);
-
-        // Enhanced focus handling for iOS 18
-        this.input.addEventListener('focus', () => {
-            if (this.isIOS18Plus) {
-                setTimeout(ensureScrollToBottom, 300);
-            } else {
-                ensureScrollToBottom();
-            }
-        });
-
-        this.input.addEventListener('blur', ensureScrollToBottom);
-
-        // iOS 18 orientation change handling
-        if (this.isIOS18Plus) {
-            window.addEventListener('orientationchange', () => {
-                setTimeout(() => {
-                    this.setupViewportFix();
-                    ensureScrollToBottom();
-                }, 200);
-            });
-        }
-    }
-
     async sendMessage() {
         if (this.isLoading) return;
 
@@ -572,7 +485,7 @@ class TerminalChat {
         }
 
         // Show user message
-        this.addMessage(userInput, 'user');
+        this.messageRenderer.addMessage(userInput, 'user', null, this.output);
         this.input.value = '';
 
         this.isLoading = true;
@@ -591,41 +504,21 @@ class TerminalChat {
             };
 
             // Make API request
-            const headers = { 'Content-Type': 'application/json' };
-            if (this.userApiKey) {
-                headers['X-User-API-Key'] = this.userApiKey;
-            }
-            if (this.sessionToken) {
-                headers['X-Session-Token'] = this.sessionToken;
-            }
+            this.updateApiCredentials();
+            const result = await this.apiClient.sendChatMessage(requestData);
 
-            const response = await fetch('/api/chat', {
-                method: 'POST',
-                headers: headers,
-                body: JSON.stringify(requestData)
-            });
-
-            if (!response.ok) {
-                let errorData;
-                try {
-                    errorData = await response.json();
-                } catch (parseError) {
-                    // If JSON parsing fails, create a fallback error data
-                    errorData = { error: `HTTP ${response.status}`, response: null };
-                }
-
-                if (response.status === 401) {
-                    this.setAuthenticated(false);
-                    const errorMessage = errorData?.response || errorData?.error || '❌ Authentication required. Please login first.';
-                    this.addMessage(errorMessage, 'error');
-                    return;
-                }
-
-                const errorMessage = errorData?.error || errorData?.response || `HTTP ${response.status}`;
-                throw new Error(errorMessage);
+            if (result.status === 401) {
+                this.setAuthenticated(false);
+                const errorMessage = result.error || '❌ Authentication required. Please login first.';
+                this.messageRenderer.addMessage(errorMessage, 'error', null, this.output);
+                return;
             }
 
-            const data = await response.json();
+            if (!result.success) {
+                throw new Error(result.error);
+            }
+
+            const data = result.data;
 
             if (!data.response) {
                 throw new Error('Empty response from server');
@@ -646,19 +539,19 @@ class TerminalChat {
             }
 
             // Add assistant response to conversation
-            this.addMessage(data.response, 'assistant', data.model);
+            this.messageRenderer.addMessage(data.response, 'assistant', data.model, this.output, this.lastUsage);
 
             // 컨텍스트 표시 업데이트 (서버 관리이므로 추정값만 표시)
             this.updateContextDisplay();
 
             // 요약 적용 알림
             if (data.summaryApplied && data.summarizedMessageCount > 0) {
-                this.addSystemMessage(`📝 Context optimized: ${data.summarizedMessageCount} messages summarized`, 'summary-applied');
+                this.messageRenderer.addSystemMessage(`📝 Context optimized: ${data.summarizedMessageCount} messages summarized`, this.output, 'summary-applied');
             }
 
         } catch (error) {
             console.error('Chat error:', error);
-            this.addMessage(`❌ Error: ${error.message}`, 'error');
+            this.messageRenderer.addMessage(`❌ Error: ${error.message}`, 'error', null, this.output);
         } finally {
             this.isLoading = false;
             this.hideLoading();
@@ -669,7 +562,7 @@ class TerminalChat {
     async handleCommand(message) {
         // Clear input immediately after command is entered
         this.input.value = '';
-        this.autoResizeTextarea();
+        autoResizeTextarea(this.input);
         this.updateSendButton();
 
         return new Promise(async (resolve) => {
@@ -684,23 +577,17 @@ class TerminalChat {
                 switch (command) {
                     case 'login':
                         if (args.length === 0) {
-                            this.addMessage('❌ Password required.\n\nUsage: /login <password>', 'error');
+                            this.messageRenderer.addMessage('❌ Password required.\n\nUsage: /login <password>', 'error', null, this.output);
                             break;
                         }
 
                         const password = args.join(' ');
-                        const loginResponse = await fetch('/api/login', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ password })
-                        });
+                        const loginResult = await this.apiClient.login(password);
 
-                        const loginData = await loginResponse.json();
-
-                        if (loginResponse.ok && loginData.login_success) {
+                        if (loginResult.success) {
                             // Save session token for this tab session
-                            if (loginData.session_token) {
-                                this.sessionToken = loginData.session_token;
+                            if (loginResult.data.session_token) {
+                                this.sessionToken = loginResult.data.session_token;
                                 sessionStorage.setItem('session_token', this.sessionToken);
                             }
 
@@ -718,50 +605,42 @@ class TerminalChat {
                             // Update welcome message after everything is loaded
                             this.updateWelcomeMessage();
 
-                            this.addMessage(loginData.response, 'system');
+                            this.messageRenderer.addMessage(loginResult.data.response, 'system', null, this.output);
                             success = true;
                         } else {
-                            this.addMessage(loginData.response || '❌ Authentication failed.', 'error');
+                            this.messageRenderer.addMessage(loginResult.data.response || '❌ Authentication failed.', 'error', null, this.output);
                         }
                         break;
 
                     case 'clear':
                         try {
-                            const headers = { 'Content-Type': 'application/json' };
-                            if (this.userApiKey) {
-                                headers['X-User-API-Key'] = this.userApiKey;
-                            }
-                            if (this.sessionToken) {
-                                headers['X-Session-Token'] = this.sessionToken;
-                            }
+                            this.updateApiCredentials();
+                            const result = await this.apiClient.clearContext();
 
-                            const response = await fetch('/api/context/clear', {
-                                method: 'POST',
-                                headers: headers
-                            });
-
-                            if (response.ok) {
+                            if (result.success) {
                                 // 클라이언트 상태도 초기화
                                 this.conversationHistory = [];
                                 this.currentTokenUsage = 0;
                                 this.output.innerHTML = '';
                                 this.updateContextDisplay();
-                                this.addSystemMessage('🔄 Chat cleared. How can I help you?');
+                                this.messageRenderer.addSystemMessage('🔄 Chat cleared. How can I help you?', this.output);
                                 success = true;
                             } else {
-                                const errorData = await response.json();
-                                this.addMessage(`❌ Failed to clear context: ${errorData.error}`, 'error');
+                                this.messageRenderer.addMessage(`❌ Failed to clear context: ${result.error}`, 'error', null, this.output);
                             }
                         } catch (error) {
                             console.error('Clear context error:', error);
-                            this.addMessage(`❌ Error clearing context: ${error.message}`, 'error');
+                            this.messageRenderer.addMessage(`❌ Error clearing context: ${error.message}`, 'error', null, this.output);
                         }
                         break;
 
                     case 'help':
-                        const helpResponse = await fetch('/api/help');
-                        const helpData = await helpResponse.json();
-                        this.addMessage(helpData.response, 'system');
+                        const helpResult = await this.apiClient.getHelp();
+                        if (helpResult.success) {
+                            this.messageRenderer.addMessage(helpResult.response, 'system', null, this.output);
+                        } else {
+                            this.messageRenderer.addMessage('❌ Failed to get help', 'error', null, this.output);
+                        }
                         success = true;
                         break;
 
@@ -773,7 +652,7 @@ class TerminalChat {
 
                     case 'set-model':
                         if (args.length === 0) {
-                            this.addMessage('❌ Model ID required.\n\nUsage: /set-model <model-id> or /set-model auto', 'error');
+                            this.messageRenderer.addMessage('❌ Model ID required.\n\nUsage: /set-model <model-id> or /set-model auto', 'error', null, this.output);
                             break;
                         }
 
@@ -784,7 +663,7 @@ class TerminalChat {
 
                     case 'set-api-key':
                         if (args.length === 0) {
-                            this.addMessage('❌ API key required.\n\nUsage: /set-api-key <your-openrouter-key>\n\nGet your key: https://openrouter.ai/settings/keys', 'error');
+                            this.messageRenderer.addMessage('❌ API key required.\n\nUsage: /set-api-key <your-openrouter-key>\n\nGet your key: https://openrouter.ai/settings/keys', 'error', null, this.output);
                             break;
                         }
 
@@ -804,30 +683,38 @@ class TerminalChat {
                         break;
 
                     case 'roles':
-                        await this.handleRolesCommand();
+                        await this.roleManager.handleRolesCommand(
+                            this.isAuthenticated
+                        );
                         success = true;
                         break;
 
                     case 'set-role':
                         if (args.length === 0) {
-                            this.addMessage('❌ Role ID required.\n\nUsage: /set-role <role-id>\n\nUse /roles to see available roles', 'error');
+                            this.messageRenderer.addMessage('❌ Role ID required.\n\nUsage: /set-role <role-id>\n\nUse /roles to see available roles', 'error', null, this.output);
                             break;
                         }
 
+                        // API 클라이언트 인증 정보 업데이트
+                        this.updateApiCredentials();
+
                         const roleId = args.join(' ');
-                        await this.setRole(roleId);
+                        const result = await this.roleManager.setRole(roleId);
+                        if (result.success) {
+                            this.selectedRole = this.roleManager.selectedRole;
+                        }
                         success = true;
                         break;
 
                     default:
-                        this.addMessage(`❌ Unknown command: /${command}\n\nType /help for available commands.`, 'error');
+                        this.messageRenderer.addMessage(`❌ Unknown command: /${command}\n\nType /help for available commands.`, 'error', null, this.output);
                         break;
                 }
 
                 resolve({ success, data });
             } catch (error) {
                 console.error('Command error:', error);
-                this.addMessage(`❌ Error executing command: ${error.message}`, 'error');
+                this.messageRenderer.addMessage(`❌ Error executing command: ${error.message}`, 'error', null, this.output);
                 resolve({ success: false, data: null });
             }
         });
@@ -835,68 +722,53 @@ class TerminalChat {
 
     async handleModelsCommand(filterArg = null) {
         if (!this.isAuthenticated && !this.userApiKey) {
-            this.addMessage('❌ Authentication required.\n\nUse /login <password> or /set-api-key <key> first.', 'error');
+            this.messageRenderer.addMessage('❌ Authentication required.\n\nUse /login <password> or /set-api-key <key> first.', 'error', null, this.output);
             return;
         }
 
         try {
-            const headers = { 'Content-Type': 'application/json' };
-            if (this.userApiKey) {
-                headers['X-User-API-Key'] = this.userApiKey;
-            }
-            if (this.sessionToken) {
-                headers['X-Session-Token'] = this.sessionToken;
-            }
+            this.updateApiCredentials();
+            const modelsResult = await this.apiClient.getModels();
 
-            const response = await fetch('/api/models', {
-                method: 'GET',
-                headers: headers
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                if (data.models && Array.isArray(data.models)) {
-                    // Filter models if filter argument is provided
-                    let filteredModels = data.models;
-                    if (filterArg) {
-                        filteredModels = data.models.filter(model => {
-                            const modelId = typeof model === 'string' ? model : model.id;
-                            return modelId.toLowerCase().includes(filterArg.toLowerCase());
-                        });
-                    }
-
-                    if (filteredModels.length === 0) {
-                        const filterMessage = filterArg ? ` matching "${filterArg}"` : '';
-                        this.addMessage(`❌ No models found${filterMessage}.`, 'error');
-                        return;
-                    }
-
-                    // Build model list
-                    const filterMessage = filterArg ? ` matching "${filterArg}"` : '';
-                    let modelList = `📋 Available Models${filterMessage} (${filteredModels.length}/${data.models.length} total)\n\n`;
-
-                    filteredModels.forEach((model, index) => {
+            if (modelsResult.success && modelsResult.models && Array.isArray(modelsResult.models)) {
+                // Filter models if filter argument is provided
+                let filteredModels = modelsResult.models;
+                if (filterArg) {
+                    filteredModels = modelsResult.models.filter(model => {
                         const modelId = typeof model === 'string' ? model : model.id;
-                        const contextLength = typeof model === 'object' ? model.context_length : null;
-                        const contextDisplay = this.formatContextLength(contextLength);
-                        modelList += `${index + 1}. ${modelId} (${contextDisplay})\n`;
+                        return modelId.toLowerCase().includes(filterArg.toLowerCase());
                     });
-
-                    modelList += `\nUsage: /set-model <model-id> or /set-model auto`;
-                    if (filterArg) {
-                        modelList += `\n💡 Use /models without filter to see all models`;
-                    }
-
-                    this.addMessage(modelList, 'system');
-                } else {
-                    this.addMessage('❌ No models available.', 'error');
                 }
+
+                if (filteredModels.length === 0) {
+                    const filterMessage = filterArg ? ` matching "${filterArg}"` : '';
+                    this.messageRenderer.addMessage(`❌ No models found${filterMessage}.`, 'error', null, this.output);
+                    return;
+                }
+
+                // Build model list
+                const filterMessage = filterArg ? ` matching "${filterArg}"` : '';
+                let modelList = `📋 Available Models${filterMessage} (${filteredModels.length}/${modelsResult.models.length} total)\n\n`;
+
+                filteredModels.forEach((model, index) => {
+                    const modelId = typeof model === 'string' ? model : model.id;
+                    const contextLength = typeof model === 'object' ? model.context_length : null;
+                    const contextDisplay = formatContextLength(contextLength);
+                    modelList += `${index + 1}. ${modelId} (${contextDisplay})\n`;
+                });
+
+                modelList += `\nUsage: /set-model <model-id> or /set-model auto`;
+                if (filterArg) {
+                    modelList += `\n💡 Use /models without filter to see all models`;
+                }
+
+                this.messageRenderer.addMessage(modelList, 'system', null, this.output);
             } else {
-                this.addMessage('❌ Failed to fetch models.', 'error');
+                this.messageRenderer.addMessage('❌ No models available.', 'error', null, this.output);
             }
         } catch (error) {
             console.error('Models fetch error:', error);
-            this.addMessage(`❌ Error fetching models: ${error.message}`, 'error');
+            this.messageRenderer.addMessage(`❌ Error fetching models: ${error.message}`, 'error', null, this.output);
         }
     }
 
@@ -910,20 +782,19 @@ class TerminalChat {
         // Update title
         this.updateModelTitle();
 
-        this.addMessage(`✅ Model set to: ${modelId}`, 'system');
+        this.messageRenderer.addMessage(`✅ Model set to: ${modelId}`, 'system', null, this.output);
     }
 
     async setUserApiKey(apiKey) {
         try {
             // Simple validation
             if (!apiKey.startsWith('sk-') || apiKey.length < 20) {
-                this.addMessage('❌ Invalid API key format. Should start with "sk-" and be at least 20 characters.', 'error');
+                this.messageRenderer.addMessage('❌ Invalid API key format. Should start with "sk-" and be at least 20 characters.', 'error', null, this.output);
                 return;
             }
 
-            // Store encrypted API key
-            const encryptedKey = this.simpleEncrypt(apiKey, this.encryptionKey);
-            localStorage.setItem('user-api-key', encryptedKey);
+            // Store encrypted API key - 인증 관련 함수 대체
+            setStoredUserApiKey(apiKey, this.encryptionKey);
             this.userApiKey = apiKey;
 
             // Update auth status immediately from server
@@ -941,7 +812,7 @@ class TerminalChat {
 
         } catch (error) {
             console.error('API key setup error:', error);
-            this.addMessage(`❌ Error setting API key: ${error.message}`, 'error');
+            this.messageRenderer.addMessage(`❌ Error setting API key: ${error.message}`, 'error', null, this.output);
         }
     }
 
@@ -959,39 +830,17 @@ class TerminalChat {
             this.updateWelcomeMessage();
         });
 
-        this.addMessage('✅ Personal API key removed\n\n📡 Use /login <password> or /set-api-key <key>', 'system');
+        this.messageRenderer.addMessage('✅ Personal API key removed\n\n📡 Use /login <password> or /set-api-key <key>', 'system', null, this.output);
     }
 
     showApiKeyStatus() {
         if (this.userApiKey) {
             const maskedKey = this.userApiKey.substring(0, 8) + '...' + this.userApiKey.substring(this.userApiKey.length - 4);
-            this.addMessage(`🔑 Personal API Key: Active\n\nKey: ${maskedKey}\n\n• /remove-api-key - Remove key\n• /models - View models`, 'system');
+            this.messageRenderer.addMessage(`🔑 Personal API Key: Active\n\nKey: ${maskedKey}\n\n• /remove-api-key - Remove key\n• /models - View models`, 'system', null, this.output);
         } else if (this.isAuthenticated) {
-            this.addMessage(`📡 Server Authentication: Active\n\n• /set-api-key <key> - Switch to personal\n• /models - View models`, 'system');
+            this.messageRenderer.addMessage(`📡 Server Authentication: Active\n\n• /set-api-key <key> - Switch to personal\n• /models - View models`, 'system', null, this.output);
         } else {
-            this.addMessage(`❌ No authentication\n\n• /login <password> - Server key\n• /set-api-key <key> - Personal key`, 'system');
-        }
-    }
-
-    simpleEncrypt(text, key) {
-        // Simple XOR encryption for local storage
-        let result = '';
-        for (let i = 0; i < text.length; i++) {
-            result += String.fromCharCode(text.charCodeAt(i) ^ key.charCodeAt(i % key.length));
-        }
-        return btoa(result);
-    }
-
-    simpleDecrypt(encrypted, key) {
-        try {
-            const decoded = atob(encrypted);
-            let result = '';
-            for (let i = 0; i < decoded.length; i++) {
-                result += String.fromCharCode(decoded.charCodeAt(i) ^ key.charCodeAt(i % key.length));
-            }
-            return result;
-        } catch {
-            return null;
+            this.messageRenderer.addMessage(`❌ No authentication\n\n• /login <password> - Server key\n• /set-api-key <key> - Personal key`, 'system', null, this.output);
         }
     }
 
@@ -1018,149 +867,18 @@ class TerminalChat {
         }
     }
 
-    addMessage(content, role, model = null) {
-        const timestamp = new Date().toLocaleTimeString();
-        const messageDiv = document.createElement('div');
-        messageDiv.className = `message ${role}-message`;
-
-        // Generate a unique ID for this message
-        const messageId = 'msg-' + Math.random().toString(36).substr(2, 9);
-        messageDiv.id = messageId;
-
-        let header = '';
-        if (role === 'user') {
-            header = `[USER] ${timestamp}`;
-        } else if (role === 'assistant') {
-            header = `[ASSISTANT] ${timestamp}`;
-            if (model) {
-                header += ` - ${this.shortenModelName(model)}`;
-            }
-        } else if (role === 'system') {
-            header = `[SYSTEM] ${timestamp}`;
-        } else if (role === 'error') {
-            header = `[ERROR] ${timestamp}`;
-        }
-
-        // Apply markdown rendering to both user and assistant messages, but not system or error messages
-        const shouldRenderMarkdown = role === 'assistant' || role === 'user';
-
-        // Create the message content first
-        const messageContent = shouldRenderMarkdown ? this.markdownParser.renderContent(content) : this.escapeHtml(content);
-
-        // Add copy button for both user and assistant messages (if they contain code blocks)
-        let copyButton = '';
-        if (shouldRenderMarkdown) {
-            // Check if content likely contains a code block
-            const hasCodeBlock = this.contentLikelyHasCodeBlock(content);
-
-            if (role === 'assistant' || hasCodeBlock) {
-                copyButton = `<button id="copy-response-${messageId}" class="copy-response-button" onclick="copyMessageContent('${messageId}')">copy all</button>`;
-            }
-        }
-
-        messageDiv.innerHTML = `
-            <div class="message-header">
-${header}
-            </div>
-            <div class="message-content" id="content-${messageId}">${messageContent}</div>
-${copyButton ? `<div class="message-footer">${copyButton}</div>` : ''}
-        `;
-
-        // 토큰 사용량 표시 및 디버깅 (AI 응답 메시지에만)
-        if (role === 'assistant') {
-            console.log('Last usage data:', this.lastUsage);
-
-            // 토큰 사용량 정보가 있으면 footer에 표시
-            if (this.lastUsage && (this.lastUsage.prompt_tokens || this.lastUsage.completion_tokens)) {
-                const promptTokens = this.formatTokenCount(this.lastUsage.prompt_tokens || 0);
-                const completionTokens = this.formatTokenCount(this.lastUsage.completion_tokens || 0);
-
-                const tokenUsage = `<span class="token-prompt">↑ ${promptTokens}</span> <span class="token-completion">↓ ${completionTokens}</span>`;
-
-                // footer가 있으면 토큰 정보를 왼쪽에 추가
-                const footer = messageDiv.querySelector('.message-footer');
-                if (footer) {
-                    footer.innerHTML = `<div class="token-usage-inline">${tokenUsage}</div>${footer.innerHTML}`;
-                } else {
-                    // footer가 없으면 토큰 정보만으로 footer 생성
-                    const tokenFooter = document.createElement('div');
-                    tokenFooter.className = 'message-footer';
-                    tokenFooter.innerHTML = `<div class="token-usage-inline">${tokenUsage}</div>`;
-                    messageDiv.appendChild(tokenFooter);
-                }
-
-                console.log('Token info added to footer:', promptTokens, completionTokens);
-            } else {
-                console.log('No token usage data available for this message');
-            }
-        }
-
-        this.output.appendChild(messageDiv);
-        this.scrollToBottom();
-
-        // Syntax highlighting for code blocks for both user and assistant messages
-        if (shouldRenderMarkdown && typeof hljs !== 'undefined') {
-            messageDiv.querySelectorAll('pre code').forEach((block) => {
-                hljs.highlightElement(block);
-            });
-        }
-    }
-
-    addSystemMessage(content, className = '') {
-        this.addMessage(content, 'system');
-        if (className) {
-            const lastMessage = this.output.lastElementChild;
-            if (lastMessage) {
-                lastMessage.classList.add(className);
-            }
-        }
-    }
-
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
-    scrollToBottom() {
-        setTimeout(() => {
-            this.output.scrollTop = this.output.scrollHeight;
-        }, 10);
-    }
-
-    shortenModelName(modelName) {
-        if (!modelName) return '';
-
-        // Remove provider prefix (everything before and including the '/')
-        let shortened = modelName;
-        if (modelName.includes('/')) {
-            shortened = modelName.split('/').slice(1).join('/');
-        }
-
-        // Clean up common suffixes and patterns
-        shortened = shortened
-            .replace(/:free$/, '')
-            .replace(/-instruct$/, '')
-            .replace(/-chat$/, '')
-            .replace(/-v\d+(\.\d+)*$/, '')
-            .replace(/(\d+)b$/, '$1B')
-            .replace(/(\d+)x(\d+)b$/, '$1×$2B');
-
-        return shortened;
-    }
-
     showModelModal() {
-        if (!this.isAuthenticated && !this.userApiKey) {
-            this.addSystemMessage('Please login with /login <password> or set your API key with /set-api-key <key> first to change models.');
-            return;
-        }
-
+        this.updateApiCredentials();
         this.populateModelList();
-        this.modelModal.classList.add('show');
+        if (this.modelModal) {
+            this.modelModal.classList.add('show');
+        }
     }
 
     hideModelModal() {
-        this.modelModal.classList.remove('show');
+        if (this.modelModal) {
+            this.modelModal.classList.remove('show');
+        }
     }
 
     async populateModelList() {
@@ -1195,10 +913,10 @@ ${copyButton ? `<div class="message-footer">${copyButton}</div>` : ''}
             }
 
             // Get provider color for consistency
-            const providerColor = this.getProviderColor(modelId);
+            const providerColor = getProviderColor(modelId);
             const provider = modelId.split('/')[0] || 'unknown';
-            const modelName = this.shortenModelName(modelId);
-            const contextDisplay = this.formatContextLength(contextLength);
+            const modelName = shortenModelName(modelId);
+            const contextDisplay = formatContextLength(contextLength);
 
             modelItem.innerHTML = `
                 <div class="model-header">
@@ -1303,61 +1021,6 @@ ${copyButton ? `<div class="message-footer">${copyButton}</div>` : ''}
         this.updateContextDisplay();
     }
 
-    // User API Key Management Methods
-    getStoredUserApiKey() {
-        try {
-            const encrypted = localStorage.getItem('user-api-key');
-            if (encrypted) {
-                return this.simpleDecrypt(encrypted, this.encryptionKey);
-            }
-        } catch (error) {
-            console.warn('Failed to decrypt user API key:', error);
-        }
-        return null;
-    }
-
-    setStoredUserApiKey(apiKey) {
-        try {
-            if (apiKey) {
-                const encrypted = this.simpleEncrypt(apiKey, this.encryptionKey);
-                localStorage.setItem('user-api-key', encrypted);
-            } else {
-                localStorage.removeItem('user-api-key');
-            }
-        } catch (error) {
-            console.warn('Failed to encrypt user API key:', error);
-        }
-    }
-
-    // New method to update auth status
-    updateAuthStatus() {
-        if (this.userApiKey) {
-            if (this.statusIndicator) {
-                this.statusIndicator.classList.add('authenticated');
-            }
-            if (this.authStatus) {
-                this.authStatus.textContent = '🔑 Personal API Key';
-                this.authStatus.style.color = '#00ff00';
-            }
-        } else if (this.isAuthenticated) {
-            if (this.statusIndicator) {
-                this.statusIndicator.classList.add('authenticated');
-            }
-            if (this.authStatus) {
-                this.authStatus.textContent = '📡 Server Key';
-                this.authStatus.style.color = '#00ff00';
-            }
-        } else {
-            if (this.statusIndicator) {
-                this.statusIndicator.classList.remove('authenticated');
-            }
-            if (this.authStatus) {
-                this.authStatus.textContent = 'Choose access method';
-                this.authStatus.style.color = '#666';
-            }
-        }
-    }
-
     updateModelTitle() {
         if (this.modelTitle) {
             let modelName = this.selectedModel;
@@ -1373,7 +1036,7 @@ ${copyButton ? `<div class="message-footer">${copyButton}</div>` : ''}
                 }
             }
 
-            let displayName = this.shortenModelName(modelName) || modelName;
+            let displayName = shortenModelName(modelName) || modelName;
 
             // 사용자 API 키 사용시 표시 추가
             if (this.userApiKey) {
@@ -1381,13 +1044,6 @@ ${copyButton ? `<div class="message-footer">${copyButton}</div>` : ''}
             }
 
             this.modelTitle.textContent = displayName;
-        }
-    }
-
-    autoResizeTextarea() {
-        if (this.input) {
-            this.input.style.height = 'auto';
-            this.input.style.height = Math.min(this.input.scrollHeight, 200) + 'px';
         }
     }
 
@@ -1417,246 +1073,34 @@ ${copyButton ? `<div class="message-footer">${copyButton}</div>` : ''}
     }
 
     async updateAuthenticationInfo() {
-        try {
-            // Prepare headers with user API key if available
-            const headers = { 'Content-Type': 'application/json' };
-            if (this.userApiKey) {
-                headers['X-User-API-Key'] = this.userApiKey;
-            }
-            if (this.sessionToken) {
-                headers['X-Session-Token'] = this.sessionToken;
-            }
+        // 인증 관련 함수 대체
+        const authInfo = await updateAuthenticationInfo(
+            this.apiClient,
+            () => this.updateApiCredentials(),
+            { statusIndicator: this.statusIndicator, authStatus: this.authStatus },
+            this.userApiKey
+        );
 
-            const response = await fetch('/api/auth-status', {
-                method: 'GET',
-                headers: headers
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                this.isAuthenticated = data.authenticated;
-                this.authMethod = data.auth_method;
-                this.authType = data.auth_type;
-            } else {
-                // Server error or not authenticated
-                this.isAuthenticated = false;
-                this.authMethod = null;
-                this.authType = null;
-            }
-        } catch (error) {
-            // On network error, assume not authenticated
-            this.isAuthenticated = false;
-            this.authMethod = null;
-            this.authType = null;
-        }
-
-        this.updateAuthStatus();
+        // 결과 적용
+        this.isAuthenticated = authInfo.isAuthenticated;
+        this.authMethod = authInfo.authMethod;
+        this.authType = authInfo.authType;
     }
 
-    async handleRolesCommand() {
-        if (!this.isAuthenticated && !this.userApiKey) {
-            this.addMessage('❌ Authentication required.\n\nUse /login <password> or /set-api-key <key> first.', 'error');
-            return;
-        }
+    // Update API client credentials when authentication changes
+    updateApiCredentials() {
+        // API 클라이언트 인증 정보 업데이트
+        this.apiClient.setCredentials(this.userApiKey, this.sessionToken);
 
-        try {
-            await this.roleManager.loadRoles(this.userApiKey, this.sessionToken);
-
-            if (this.roleManager.availableRoles.length === 0) {
-                this.addMessage('❌ No roles available.', 'error');
-                return;
-            }
-
-            let roleList = `🎭 Available Roles (${this.roleManager.availableRoles.length})\n\n`;
-
-            this.roleManager.availableRoles.forEach((role) => {
-                const current = role.id === this.selectedRole ? ' ← Current' : '';
-                roleList += `${role.icon || '🤖'} ${role.id}${current}\n   ${role.description}\n\n`;
-            });
-
-            roleList += `Usage: /set-role <role-id>`;
-            this.addMessage(roleList, 'system');
-        } catch (error) {
-            console.error('Roles fetch error:', error);
-            this.addMessage(`❌ Error fetching roles: ${error.message}`, 'error');
-        }
+        // 역할 매니저에 최신 API 클라이언트 설정
+        this.roleManager.setApiClient(this.apiClient);
     }
 
-    async setRole(roleId) {
-        const result = await this.roleManager.setRole(roleId, this.userApiKey, this.sessionToken);
-
-        if (result.success) {
-            this.selectedRole = roleId;
-            this.updateRoleTitle();
-            this.addMessage(`✅ Role set to: ${this.roleManager.getRoleDisplayName(roleId)}`, 'system');
-        } else {
-            this.addMessage(`❌ Failed to set role: ${result.error}`, 'error');
-        }
-    }
-
+    // Role 모달 표시 (인증 상태 전달)
     showRoleModal() {
-        if (!this.isAuthenticated && !this.userApiKey) {
-            this.addSystemMessage('Please login with /login <password> or set your API key with /set-api-key <key> first to change roles.');
-            return;
-        }
-
-        this.populateRoleList();
-        this.roleModal.classList.add('show');
-    }
-
-    hideRoleModal() {
-        this.roleModal.classList.remove('show');
-    }
-
-    async populateRoleList() {
-        // Show loading state
-        this.roleList.innerHTML = '<div class="role-list-loading">Loading roles...</div>';
-
-        // Load roles if not already loaded
-        if (this.roleManager.availableRoles.length === 0) {
-            await this.roleManager.loadRoles(this.userApiKey, this.sessionToken);
-        }
-
-        // Clear loading and populate list
-        this.roleList.innerHTML = '';
-
-        if (this.roleManager.availableRoles.length === 0) {
-            this.roleList.innerHTML = '<div class="role-list-loading">No roles available</div>';
-            return;
-        }
-
-        this.roleManager.availableRoles.forEach((role) => {
-            const roleItem = document.createElement('div');
-            roleItem.className = 'role-item';
-
-            // Check if this is the currently selected role
-            if (role.id === this.selectedRole) {
-                roleItem.classList.add('selected');
-            }
-
-            roleItem.innerHTML = `
-                <div class="role-header">
-                    <span class="role-icon">${role.icon || '🤖'}</span>
-                    <span class="role-name">${role.name}</span>
-                </div>
-                <div class="role-description">${role.description}</div>
-            `;
-
-            // Add both click and touch events for better mobile support
-            const selectRole = () => {
-                this.setRole(role.id);
-                this.hideRoleModal();
-            };
-
-            roleItem.addEventListener('click', selectRole);
-
-            // Enhanced touch support for mobile
-            if ('ontouchstart' in window) {
-                let touchStartTime = 0;
-
-                roleItem.addEventListener('touchstart', (e) => {
-                    touchStartTime = Date.now();
-                }, { passive: true });
-
-                roleItem.addEventListener('touchend', (e) => {
-                    e.preventDefault();
-                    const touchDuration = Date.now() - touchStartTime;
-                    if (touchDuration < 500) {
-                        selectRole();
-                    }
-                }, { passive: false });
-            }
-
-            this.roleList.appendChild(roleItem);
-        });
-    }
-
-    updateRoleTitle() {
-        if (this.roleTitle) {
-            const displayName = this.roleManager.formatRoleNameForDisplay(this.selectedRole);
-            this.roleTitle.textContent = displayName;
-        }
-    }
-
-    // 토큰 수 포맷팅 (예: 5000 -> 5k)
-    formatTokenCount(count) {
-        if (!count) return '0';
-
-        if (count >= 1000) {
-            return (count / 1000).toFixed(1) + 'k';
-        }
-
-        return count.toString();
-    }
-
-    // Helper function to detect if content likely contains a code block
-    contentLikelyHasCodeBlock(content) {
-        // Check for markdown code block syntax (```), or indented code blocks, or inline code (`)
-        return content.includes('```') ||
-               content.includes('    ') || // 4 spaces for indented code
-               (content.includes('`') && !content.includes('```')) ||
-               // Check for likely array/object notations
-               content.includes('[') && content.includes(']') ||
-               content.includes('{') && content.includes('}') ||
-               // Check for common programming language keywords
-               content.match(/\b(function|var|const|let|if|else|for|while|return|class|import|export)\b/);
-    }
-
-    // Generate consistent color for provider based on provider name
-    getProviderColor(modelId) {
-        const provider = modelId.split('/')[0] || modelId;
-
-        // Simple hash function
-        let hash = 0;
-        for (let i = 0; i < provider.length; i++) {
-            const char = provider.charCodeAt(i);
-            hash = ((hash << 5) - hash) + char;
-            hash = hash & hash; // Convert to 32-bit integer
-        }
-
-        // Convert hash to RGB values with good contrast
-        const r = Math.abs(hash) % 180 + 50; // 50-229 range for better visibility
-        const g = Math.abs(hash >> 8) % 180 + 50;
-        const b = Math.abs(hash >> 16) % 180 + 50;
-
-        return `rgb(${r}, ${g}, ${b})`;
-    }
-
-    // Format context length for display
-    formatContextLength(contextLength) {
-        if (!contextLength || contextLength === 0) return 'N/A';
-
-        if (contextLength >= 1000000) {
-            return `${(contextLength / 1000000).toFixed(1)}M`;
-        } else if (contextLength >= 1000) {
-            return `${Math.round(contextLength / 1000)}k`;
-        } else {
-            return contextLength.toString();
-        }
-    }
-}
-
-// Global function to copy message content only (not header or token usage)
-function copyMessageContent(messageId) {
-    const contentElement = document.getElementById(`content-${messageId}`);
-    if (contentElement) {
-        // Get text content without formatting
-        const text = contentElement.textContent;
-        navigator.clipboard.writeText(text).then(() => {
-            // Visual feedback
-            const button = document.getElementById(`copy-response-${messageId}`);
-            if (button) {
-                const originalText = button.textContent;
-                button.textContent = 'copied!';
-                button.classList.add('copied');
-                setTimeout(() => {
-                    button.textContent = originalText;
-                    button.classList.remove('copied');
-                }, 2000);
-            }
-        }).catch(err => {
-            console.error('Failed to copy message content:', err);
-        });
+        // API 클라이언트 인증 정보 업데이트
+        this.updateApiCredentials();
+        this.roleManager.showRoleModal(this.isAuthenticated);
     }
 }
 

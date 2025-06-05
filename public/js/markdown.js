@@ -1,5 +1,5 @@
 // Markdown parsing functionality
-class MarkdownParser {
+export class MarkdownParser {
     constructor() {
         this.hljsReady = false;
         this.markedReady = false;
@@ -198,54 +198,43 @@ class MarkdownParser {
         }
     }
 
-    // Fix ordered list numbering and nested list display
     fixOrderedLists(element) {
-        // Fix alignment for large numbered lists (10+ items)
+        // Fix numbering for ordered lists
         const orderedLists = element.querySelectorAll('ol');
+
         orderedLists.forEach(ol => {
-            // Count the number of items
-            const items = ol.querySelectorAll(':scope > li').length;
-            if (items >= 10) {
-                ol.classList.add('large-list');
-            }
-            if (items >= 100) {
-                ol.classList.add('very-large-list');
+            let currentIndex = 1;
+            const startAttr = ol.getAttribute('start');
+            if (startAttr) {
+                currentIndex = parseInt(startAttr);
             }
 
-            // Get the depth level of this list (how nested it is)
-            let nestLevel = 0;
-            let parent = ol.parentElement;
-            while (parent) {
-                if (parent.tagName === 'LI' && parent.parentElement &&
-                    (parent.parentElement.tagName === 'OL' || parent.parentElement.tagName === 'UL')) {
-                    nestLevel++;
-                }
-                parent = parent.parentElement;
-            }
-
-            // Add appropriate nesting class
-            if (nestLevel > 0) {
-                ol.classList.add(`nested-list-level-${nestLevel}`);
-            }
+            const listItems = ol.querySelectorAll('li');
+            listItems.forEach(li => {
+                // Use CSS counter for consistent numbering
+                li.style.counterIncrement = `list-counter-${currentIndex}`;
+                currentIndex++;
+            });
         });
     }
 }
 
-// Global function to copy code block content
-function copyCodeToClipboard(codeId) {
+// Global utility functions for code copying (needed for onclick handlers in rendered HTML)
+export function copyCodeToClipboard(codeId) {
     const codeElement = document.getElementById(codeId);
     if (codeElement) {
-        const code = codeElement.textContent;
-        navigator.clipboard.writeText(code).then(() => {
+        const text = codeElement.textContent;
+        navigator.clipboard.writeText(text).then(() => {
             // Visual feedback
-            const button = codeElement.parentElement.querySelector('.copy-button');
-            if (button) {
-                const originalText = button.textContent;
-                button.textContent = 'copied!';
-                button.classList.add('copied');
+            const container = codeElement.closest('.code-container');
+            const copyBtn = container?.querySelector('.copy-button');
+            if (copyBtn) {
+                const originalText = copyBtn.textContent;
+                copyBtn.textContent = 'copied!';
+                copyBtn.classList.add('copied');
                 setTimeout(() => {
-                    button.textContent = originalText;
-                    button.classList.remove('copied');
+                    copyBtn.textContent = originalText;
+                    copyBtn.classList.remove('copied');
                 }, 2000);
             }
         }).catch(err => {
@@ -254,26 +243,22 @@ function copyCodeToClipboard(codeId) {
     }
 }
 
-// Global function to copy entire response
-function copyEntireResponse(responseId) {
+// Function to copy entire response
+export function copyEntireResponse(responseId) {
     const responseElement = document.getElementById(responseId);
     if (responseElement) {
-        // Get text content without formatting
         const text = responseElement.textContent;
         navigator.clipboard.writeText(text).then(() => {
-            // Visual feedback
-            const button = document.getElementById(`copy-response-${responseId}`);
-            if (button) {
-                const originalText = button.textContent;
-                button.textContent = 'copied!';
-                button.classList.add('copied');
-                setTimeout(() => {
-                    button.textContent = originalText;
-                    button.classList.remove('copied');
-                }, 2000);
-            }
+            console.log('Response copied to clipboard');
+            // Could add visual feedback here if needed
         }).catch(err => {
             console.error('Failed to copy response:', err);
         });
     }
+}
+
+// Make functions globally available for onclick handlers
+if (typeof window !== 'undefined') {
+    window.copyCodeToClipboard = copyCodeToClipboard;
+    window.copyEntireResponse = copyEntireResponse;
 }
