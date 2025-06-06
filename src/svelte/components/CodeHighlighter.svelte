@@ -7,7 +7,7 @@
 
   interface Props {
     content?: string;
-    role?: 'user' | 'assistant';
+    role?: 'user' | 'assistant' | 'system';
   }
 
   let { content = '', role = 'assistant' }: Props = $props();

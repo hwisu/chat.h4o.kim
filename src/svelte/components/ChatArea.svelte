@@ -5,7 +5,7 @@ import { authState } from '../stores/auth.svelte';
 import { uiState } from '../stores/ui.svelte';
   import ChatMessage from './ChatMessage.svelte';
 
-  let chatContainer;
+  let chatContainer: HTMLDivElement;
 
   // 스크롤을 하단으로 이동
   function scrollToBottom() {
@@ -55,24 +55,14 @@ import { uiState } from '../stores/ui.svelte';
 
   <!-- 채팅 메시지들 -->
   {#each messagesState as message, index}
-    {#if message.role === 'system' && message.type}
-      <div class="message {message.type}">
-        <div class="message-content">
-          {@html message.content.replace(/\n/g, '<br>')}
-        </div>
-        <div class="message-timestamp">
-          {new Date(message.timestamp).toLocaleTimeString()}
-        </div>
-      </div>
-    {:else}
-      <ChatMessage 
-        role={message.role}
-        content={message.content}
-        timestamp={message.timestamp}
-        model={message.model || ''}
-        tokenUsage={message.tokenUsage || {}}
-      />
-    {/if}
+    <ChatMessage 
+      role={message.role}
+      content={message.content}
+      timestamp={typeof message.timestamp === 'object' ? message.timestamp.getTime() : message.timestamp}
+      model={(message as any).model || ''}
+      tokenUsage={(message as any).tokenUsage || {}}
+      type={(message as any).type || ''}
+    />
   {/each}
 
   <!-- 로딩 인디케이터 -->
@@ -96,6 +86,7 @@ import { uiState } from '../stores/ui.svelte';
     flex: 1;
     overflow-y: auto;
     padding: 20px;
+    padding-top: 80px; /* 상단 고정 헤더를 위한 공간 */
     padding-bottom: 120px; /* 하단 입력창을 위한 공간 */
     background: #0a0a0a;
     scroll-behavior: smooth;
@@ -107,40 +98,7 @@ import { uiState } from '../stores/ui.svelte';
     animation: fadeIn 0.3s ease-in-out forwards;
   }
 
-  .message.system {
-    background: rgba(139, 69, 19, 0.3);
-    border: 1px solid rgba(255, 140, 0, 0.5);
-    border-radius: 8px;
-    padding: 15px;
-    margin: 20px 0;
-  }
 
-  .message.success {
-    background: rgba(34, 139, 34, 0.2);
-    border: 1px solid rgba(0, 255, 0, 0.4);
-    border-radius: 8px;
-    padding: 15px;
-    margin: 20px 0;
-    color: #90EE90;
-  }
-
-  .message.models {
-    background: rgba(139, 69, 19, 0.3);
-    border: 1px solid rgba(255, 140, 0, 0.5);
-    border-radius: 8px;
-    padding: 15px;
-    margin: 20px 0;
-    color: #FFD700;
-    font-family: 'JetBrains Mono', monospace;
-  }
-
-  .message.error {
-    background: rgba(255, 68, 68, 0.1);
-    border: 1px solid rgba(255, 68, 68, 0.3);
-    border-radius: 8px;
-    padding: 15px;
-    color: #ff6b6b;
-  }
 
   .message.loading {
     background: rgba(255, 255, 255, 0.05);

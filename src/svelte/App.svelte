@@ -4,9 +4,9 @@
   import ChatArea from './components/ChatArea.svelte';
   import ChatInput from './components/ChatInput.svelte';
   // 모달 컴포넌트들을 동적으로 로드
-  let AuthModal = $state(null);
-  let ModelModal = $state(null);
-  let RoleModal = $state(null);
+  let AuthModal: any = $state(null);
+  let ModelModal: any = $state(null);
+  let RoleModal: any = $state(null);
 
   // 동적 로드 함수들
   async function loadAuthModal() {
@@ -113,6 +113,15 @@
 </div>
 
 <style>
+  :global(html) {
+    scroll-behavior: smooth;
+    scroll-padding-top: 60px;
+  }
+
+  :global(body) {
+    scroll-behavior: smooth;
+  }
+
   .app {
     height: 100vh;
     display: flex;
@@ -125,4 +134,6 @@
     margin: 0;
     padding: 0;
   }
+
+
 </style> 

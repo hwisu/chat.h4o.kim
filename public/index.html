@@ -9,6 +9,7 @@
     <meta name="description" content="Chatty - Free AI Chat at openrouter tester with multi-language optimization">
     <meta name="theme-color" content="#0a0a0a">
     <meta name="display" content="standalone">
+    <link rel="manifest" href="/manifest.json">
 
     <!-- Apple PWA Tags -->
     <meta name="mobile-web-app-capable" content="yes">
@@ -87,6 +88,21 @@
 
     <!-- Svelte 앱 -->
     <script type="module" src="/svelte/bundle.js"></script>
+
+    <!-- PWA Service Worker -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then((registration) => {
+                        console.log('SW registered: ', registration);
+                    })
+                    .catch((registrationError) => {
+                        console.log('SW registration failed: ', registrationError);
+                    });
+            });
+        }
+    </script>
 
 </body>
 </html>

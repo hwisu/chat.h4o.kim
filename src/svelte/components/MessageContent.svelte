@@ -2,7 +2,7 @@
   import CodeHighlighter from './CodeHighlighter.svelte';
 
   interface Props {
-    role: 'user' | 'assistant';
+    role: 'user' | 'assistant' | 'system';
     content: string;
     timestamp: number;
   }
@@ -13,12 +13,16 @@
 {#if role === 'user'}
   <div class="user-message-wrapper">
     <div class="message-content {role}">
-      <CodeHighlighter {content} {role} />
+      <CodeHighlighter {content} role={role} />
     </div>
+  </div>
+{:else if role === 'system'}
+  <div class="message-content {role}">
+    {@html content.replace(/\n/g, '<br>')}
   </div>
 {:else}
   <div class="message-content {role}">
-    <CodeHighlighter {content} {role} />
+    <CodeHighlighter {content} role={role} />
   </div>
 {/if}
 
@@ -39,6 +43,16 @@
   .message-content.assistant {
     text-align: left;
     color: #DCD7BA; /* fujiWhite - 어시스턴트 메시지 */
+  }
+
+  .message-content.system {
+    text-align: left;
+    color: #ff8c00;
+    background: rgba(255, 140, 0, 0.1);
+    border: 1px solid rgba(255, 140, 0, 0.3);
+    border-radius: 8px;
+    padding: 15px;
+    margin: 20px 0;
   }
 
   /* 사용자 메시지 래퍼 - 리스트가 깨지지 않도록 */

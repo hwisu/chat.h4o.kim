@@ -1,6 +1,6 @@
 <script lang="ts">
   interface Props {
-    role: 'user' | 'assistant';
+    role: 'user' | 'assistant' | 'system';
     timestamp: number;
     model?: string;
   }
@@ -21,6 +21,8 @@
 <div class="message-header {role}">
   {#if role === 'user'}
     <span class="message-label">[USER] {formatTime(timestamp)}</span>
+  {:else if role === 'system'}
+    <span class="message-label">[SYSTEM] {formatTime(timestamp)}</span>
   {:else}
     <span class="message-label">[ASSISTANT] {formatTime(timestamp)}{model ? ` - ${model}` : ''}</span>
   {/if}
@@ -51,5 +53,9 @@
 
   .message-header.assistant .message-label {
     color: #ccc;
+  }
+
+  .message-header.system .message-label {
+    color: #ff8c00;
   }
 </style> 

@@ -7,7 +7,7 @@ import { uiState } from '../stores/ui.svelte';
   let { onScrollToBottom } = $props();
 
   let message = $state('');
-  let textareaRef: HTMLTextAreaElement = $state();
+  let textareaRef: HTMLTextAreaElement | undefined = $state();
 
   async function send() {
     const content = message.trim();
@@ -24,7 +24,7 @@ import { uiState } from '../stores/ui.svelte';
     await chatService.sendMessage(content);
   }
 
-  function handleKeydown(e) {
+  function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       send();
@@ -61,6 +61,8 @@ import { uiState } from '../stores/ui.svelte';
       autocomplete="off"
       autocapitalize="off"
       spellcheck="false"
+      inputmode="text"
+      enterkeyhint="send"
       placeholder="Type your message..."
       oninput={handleInput}
       onkeydown={handleKeydown}
