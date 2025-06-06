@@ -6,15 +6,8 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
-    "build:analyze": "vite build --mode production && npm run analyze",
-    "analyze": "npx vite-bundle-analyzer public/svelte",
     "dev": "wrangler dev",
-    "svelte-dev": "vite",
-    "dev-all": "./scripts/dev.sh",
-    "type-check": "tsc --noEmit",
-    "deploy": "npm run build:analyze && wrangler deploy",
-    "size-check": "npm run build && du -sh public/svelte/*",
-    "clean": "rm -rf public/svelte .wrangler/tmp"
+    "deploy": "npm run build && wrangler deploy"
   },
   "keywords": [
     "cloudflare-workers",
