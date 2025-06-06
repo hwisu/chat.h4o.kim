@@ -74,7 +74,7 @@ auth.post('/login', async (c) => {
       return c.json({
         login_success: true,
         session_token: encryptedToken, // Send token to client for session storage
-        response: `✅ Server login successful!\n\n📡 Using server API key\n\n💬 Commands:\n• /models - List models\n• /set-model <id> - Set model\n• /clear - Clear chat\n• /help - Show help\n\n🔄 Session expires when tab closes`
+        response: `✅ Server login successful!\n\n📡 Using server API key\n\n💬 Main Commands:\n• /models - List available AI models\n• /set-model <id> - Set specific model\n• /set-model auto - Use auto-selection\n• /roles - List available AI roles\n• /set-role <role-id> - Set AI personality\n• /clear - Clear conversation history\n• /help - Show all commands\n\n🔄 Session expires when tab closes`
       });
     } else {
       return c.json({

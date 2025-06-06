@@ -1,25 +1,39 @@
 <script lang="ts">
   import { rolesState } from '../stores/roles.svelte';
-import { apiClient } from '../services/api.js';
-import { updateRoles } from '../stores/roles.svelte';
-import { setError } from '../stores/ui.svelte';
+  import { apiClient } from '../services/api.js';
+  import { updateRoles } from '../stores/roles.svelte';
+  import { setError } from '../stores/ui.svelte';
+  import { ROLE_CATEGORIES, getRolesGroupedByCategory, getCategoryById, type RoleCategory } from '../../roles.js';
 
   // Svelte 5 props 시스템 사용
   let { onClose, onSelect } = $props();
 
   let isLoading = $state(false);
+  let expandedCategories = $state(new Set<string>());
+
+  // 카테고리별로 그룹화된 롤들
+  let groupedRoles = $derived(getRolesGroupedByCategory());
 
   function close() {
     onClose?.();
   }
 
-  function handleBackdropClick(event) {
+  function handleBackdropClick(event: MouseEvent) {
     if (event.target === event.currentTarget) {
       close();
     }
   }
 
-  async function selectRole(roleId) {
+  function toggleCategory(categoryId: string) {
+    if (expandedCategories.has(categoryId)) {
+      expandedCategories.delete(categoryId);
+    } else {
+      expandedCategories.add(categoryId);
+    }
+    expandedCategories = new Set(expandedCategories);
+  }
+
+  async function selectRole(roleId: string) {
     try {
       isLoading = true;
       
@@ -33,8 +47,7 @@ import { setError } from '../stores/ui.svelte';
             selected: roleId,
             selectedInfo: {
               name: selectedRole.name,
-              description: selectedRole.description,
-              system_prompt: selectedRole.system_prompt
+              description: selectedRole.description
             }
           });
         }
@@ -51,20 +64,20 @@ import { setError } from '../stores/ui.svelte';
     }
   }
 
-  function handleKeydown(event) {
+  function handleKeydown(event: KeyboardEvent) {
     if (event.key === 'Escape') {
       close();
     }
   }
 
   // 롤 이름 포맷팅
-  function formatRoleName(role) {
+  function formatRoleName(role: any) {
     if (!role) return '';
     return role.name || role.id || 'Unknown Role';
   }
 
   // 롤 설명 포맷팅 (최대 100글자)
-  function formatRoleDescription(description) {
+  function formatRoleDescription(description: string) {
     if (!description) return '';
     return description.length > 100 ? description.substring(0, 100) + '...' : description;
   }
@@ -98,25 +111,61 @@ import { setError } from '../stores/ui.svelte';
           No roles available. Please check your authentication.
         </div>
       {:else}
-        {#each rolesState.available as role}
-          <button 
-            class="role-list-item {role.id === rolesState.selected ? 'selected' : ''}"
-            onclick={() => selectRole(role.id)}
-            disabled={isLoading}
-            aria-label="Select {formatRoleName(role)}"
-          >
-            <div class="role-info">
-              <div class="role-name">{formatRoleName(role)}</div>
-              {#if role.description}
-                <div class="role-description">
-                  {formatRoleDescription(role.description)}
+        {#each ROLE_CATEGORIES as category}
+          {@const categoryRoles = groupedRoles[category.id] || []}
+          {#if categoryRoles.length > 0}
+            <div class="category-section">
+              <button 
+                class="category-header"
+                onclick={() => toggleCategory(category.id)}
+                aria-expanded={expandedCategories.has(category.id)}
+              >
+                <div class="category-info">
+                  <span class="category-icon">{category.icon}</span>
+                  <div class="category-text">
+                    <span class="category-name">{category.name}</span>
+                    <span class="category-count">({categoryRoles.length}개)</span>
+                  </div>
+                </div>
+                <span class="category-toggle {expandedCategories.has(category.id) ? 'expanded' : ''}">
+                  ▼
+                </span>
+              </button>
+              
+              {#if expandedCategories.has(category.id)}
+                <div class="category-roles">
+                  {#each categoryRoles as role}
+                    {@const availableRole = rolesState.available.find(r => r.id === role.id)}
+                    {#if availableRole}
+                      <button 
+                        class="role-list-item {role.id === rolesState.selected ? 'selected' : ''}"
+                        onclick={() => selectRole(role.id)}
+                        disabled={isLoading}
+                        aria-label="Select {formatRoleName(availableRole)}"
+                      >
+                        <div class="role-info">
+                          <div class="role-name">
+                            {#if role.icon}
+                              <span class="role-icon">{role.icon}</span>
+                            {/if}
+                            {formatRoleName(availableRole)}
+                          </div>
+                          {#if availableRole.description}
+                            <div class="role-description">
+                              {formatRoleDescription(availableRole.description)}
+                            </div>
+                          {/if}
+                        </div>
+                        {#if role.id === rolesState.selected}
+                          <span class="role-selected-indicator">✓</span>
+                        {/if}
+                      </button>
+                    {/if}
+                  {/each}
                 </div>
               {/if}
             </div>
-            {#if role.id === rolesState.selected}
-              <span class="role-selected-indicator">✓</span>
-            {/if}
-          </button>
+          {/if}
         {/each}
       {/if}
     </div>
@@ -199,26 +248,89 @@ import { setError } from '../stores/ui.svelte';
 
   .role-list-loading {
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 10px;
-    padding: 40px;
+    padding: 40px 20px;
     color: #888;
-  }
-
-  .loading-spinner {
-    width: 20px;
-    height: 20px;
-    border: 2px solid #333;
-    border-top: 2px solid #00ff00;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
+    gap: 10px;
   }
 
   .role-list-empty {
+    padding: 40px 20px;
     text-align: center;
-    padding: 40px;
     color: #888;
+    font-style: italic;
+  }
+
+  /* 카테고리 섹션 */
+  .category-section {
+    margin-bottom: 8px;
+  }
+
+  .category-header {
+    width: 100%;
+    background: none;
+    border: none;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.2s;
+    color: #ddd;
+  }
+
+  .category-header:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .category-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .category-icon {
+    font-size: 20px;
+  }
+
+  .category-text {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+
+  .category-name {
+    font-size: 16px;
+    font-weight: 500;
+    color: #eee;
+  }
+
+  .category-count {
+    font-size: 12px;
+    color: #888;
+  }
+
+  .category-toggle {
+    font-size: 12px;
+    color: #888;
+    transition: transform 0.2s;
+  }
+
+  .category-toggle.expanded {
+    transform: rotate(180deg);
+  }
+
+  /* 카테고리별 롤 목록 */
+  .category-roles {
+    margin-left: 16px;
+    border-left: 2px solid #333;
+    padding-left: 16px;
+    margin-top: 8px;
+    margin-bottom: 16px;
   }
 
   .role-list-item {
@@ -226,61 +338,91 @@ import { setError } from '../stores/ui.svelte';
     background: none;
     border: 1px solid #333;
     border-radius: 6px;
-    padding: 15px;
+    padding: 12px 16px;
     margin-bottom: 8px;
-    color: #eee;
     cursor: pointer;
-    transition: all 0.2s;
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    justify-content: space-between;
+    transition: all 0.2s;
+    color: #ddd;
     text-align: left;
   }
 
   .role-list-item:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.05);
     border-color: #555;
+    background: rgba(255, 255, 255, 0.05);
   }
 
   .role-list-item.selected {
-    background: rgba(0, 255, 0, 0.1);
-    border-color: #00ff00;
+    border-color: #4CAF50;
+    background: rgba(76, 175, 80, 0.1);
   }
 
   .role-list-item:disabled {
-    opacity: 0.6;
+    opacity: 0.5;
     cursor: not-allowed;
   }
 
   .role-info {
     flex: 1;
+    min-width: 0;
   }
 
   .role-name {
     font-size: 14px;
     font-weight: 500;
-    margin-bottom: 6px;
+    color: #eee;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .role-icon {
+    font-size: 16px;
   }
 
   .role-description {
     font-size: 12px;
-    color: #888;
+    color: #aaa;
     line-height: 1.4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
   }
 
   .role-selected-indicator {
-    color: #00ff00;
+    color: #4CAF50;
     font-size: 16px;
     font-weight: bold;
+    margin-left: 8px;
+    flex-shrink: 0;
   }
 
   .role-modal-loading {
-    background: rgba(0, 255, 0, 0.1);
-    border-top: 1px solid #333;
-    padding: 15px;
-    text-align: center;
-    color: #00ff00;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #eee;
     font-size: 14px;
+  }
+
+  .loading-spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid #333;
+    border-top: 2px solid #4CAF50;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
   }
 
   @keyframes spin {
@@ -288,21 +430,32 @@ import { setError } from '../stores/ui.svelte';
     100% { transform: rotate(360deg); }
   }
 
-  /* 스크롤바 스타일링 */
-  .role-list::-webkit-scrollbar {
-    width: 6px;
-  }
+  /* 모바일 최적화 */
+  @media (max-width: 768px) {
+    .role-modal-content {
+      width: 95%;
+      max-height: 85vh;
+    }
 
-  .role-list::-webkit-scrollbar-track {
-    background: #111;
-  }
+    .role-modal-header {
+      padding: 16px;
+    }
 
-  .role-list::-webkit-scrollbar-thumb {
-    background: #333;
-    border-radius: 3px;
-  }
+    .role-list {
+      padding: 8px;
+    }
 
-  .role-list::-webkit-scrollbar-thumb:hover {
-    background: #555;
+    .category-header {
+      padding: 10px 12px;
+    }
+
+    .role-list-item {
+      padding: 10px 12px;
+    }
+
+    .category-roles {
+      margin-left: 12px;
+      padding-left: 12px;
+    }
   }
 </style> 

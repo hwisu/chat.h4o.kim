@@ -4,7 +4,48 @@ export interface Role {
   description: string;
   systemPrompt: string;
   icon?: string;
+  category: string;
 }
+
+export interface RoleCategory {
+  id: string;
+  name: string;
+  icon: string;
+  description: string;
+}
+
+export const ROLE_CATEGORIES: RoleCategory[] = [
+  {
+    id: 'development',
+    name: '개발 & 엔지니어링',
+    icon: '💻',
+    description: '코딩, 시스템 설계, DevOps 관련'
+  },
+  {
+    id: 'analysis',
+    name: '분석 & 데이터',
+    icon: '📊',
+    description: '데이터 분석, 보안, 아키텍처'
+  },
+  {
+    id: 'creative',
+    name: '창작 & 글쓰기',
+    icon: '✍️',
+    description: '문서 작성, 창작, 번역'
+  },
+  {
+    id: 'business',
+    name: '비즈니스 & 전략',
+    icon: '📈',
+    description: '제품 관리, 마케팅, 커리어'
+  },
+  {
+    id: 'education',
+    name: '교육 & 지원',
+    icon: '🎓',
+    description: '학습 지원, 상담, 일반 도움'
+  }
+];
 
 export const AVAILABLE_ROLES: Role[] = [
   {
@@ -12,7 +53,8 @@ export const AVAILABLE_ROLES: Role[] = [
     name: 'General Assistant',
     description: 'A helpful AI assistant for general tasks',
     systemPrompt: `You are a helpful, harmless, and honest AI assistant. You provide accurate information, help solve problems, and engage in meaningful conversations while being respectful and professional.`,
-    icon: '🤖'
+    icon: '🤖',
+    category: 'education'
   },
   {
     id: 'coding-assistant',
@@ -34,7 +76,8 @@ When providing code:
 - Use practical, production-ready examples
 
 Always be precise, thorough, and focused on helping the user solve their coding challenges effectively.`,
-    icon: '💻'
+    icon: '💻',
+    category: 'development'
   },
   {
     id: 'code-reviewer',
@@ -57,7 +100,8 @@ For each review:
 5. Consider the broader system architecture and impact
 
 Be constructive, detailed, and focus on improving code quality and team knowledge sharing.`,
-    icon: '🔍'
+    icon: '🔍',
+    category: 'development'
   },
   {
     id: 'system-architect',
@@ -82,7 +126,8 @@ When providing architectural guidance:
 - Balance theoretical best practices with practical implementation
 
 Focus on creating robust, scalable solutions that solve real business problems.`,
-    icon: '🏗️'
+    icon: '🏗️',
+    category: 'analysis'
   },
   {
     id: 'debugger',
@@ -112,7 +157,8 @@ Ask clarifying questions to understand:
 - Recent changes that might have caused the issue
 
 Be methodical, patient, and thorough in your debugging assistance.`,
-    icon: '🐛'
+    icon: '🐛',
+    category: 'development'
   },
   {
     id: 'documentation-writer',
@@ -143,7 +189,8 @@ For each documentation task:
 5. Add troubleshooting and common issues sections
 
 Focus on making complex technical concepts accessible and actionable.`,
-    icon: '📝'
+    icon: '📝',
+    category: 'creative'
   },
   {
     id: 'student',
@@ -174,7 +221,8 @@ Always remember:
 - Make learning engaging and relevant to their interests
 
 Be supportive, encouraging, and focused on helping students develop deep understanding.`,
-    icon: '🎓'
+    icon: '🎓',
+    category: 'education'
   },
   {
     id: 'essayist',
@@ -206,7 +254,8 @@ Key principles:
 - Consider the reader's perspective and experience
 
 Whether it's academic essays, personal statements, blog posts, or creative writing, focus on helping create engaging, well-crafted content that effectively communicates ideas.`,
-    icon: '✍️'
+    icon: '✍️',
+    category: 'creative'
   },
   {
     id: 'job-seeker',
@@ -244,7 +293,8 @@ Career development focus:
 - Navigate career transitions and pivots
 
 Be supportive, realistic, and focused on helping achieve career success through strategic planning and preparation.`,
-    icon: '💼'
+    icon: '💼',
+    category: 'business'
   },
   {
     id: 'product-manager',
@@ -277,7 +327,8 @@ For product decisions:
 6. Think about risks and mitigation strategies
 
 Whether it's feature planning, user story writing, or strategic planning, focus on creating products that deliver real value to users while achieving business goals.`,
-    icon: '📊'
+    icon: '📊',
+    category: 'business'
   },
   {
     id: 'devops-engineer',
@@ -310,7 +361,8 @@ For infrastructure solutions:
 6. Plan for disaster recovery and backup strategies
 
 Whether it's setting up deployment pipelines, managing cloud infrastructure, or troubleshooting production issues, focus on building robust, automated systems that enable teams to deliver software reliably and efficiently.`,
-    icon: '⚙️'
+    icon: '⚙️',
+    category: 'development'
   }
 ];
 
@@ -332,4 +384,25 @@ export function getAllRoleIds(): string[] {
 export function getPublicRoleInfo(role: Role): Omit<Role, 'systemPrompt'> {
   const { systemPrompt, ...publicInfo } = role;
   return publicInfo;
+}
+
+// 카테고리별 롤 조회
+export function getRolesByCategory(categoryId: string): Role[] {
+  return AVAILABLE_ROLES.filter(role => role.category === categoryId);
+}
+
+// 카테고리별 그룹화된 롤 반환
+export function getRolesGroupedByCategory(): { [categoryId: string]: Role[] } {
+  const grouped: { [categoryId: string]: Role[] } = {};
+  
+  ROLE_CATEGORIES.forEach(category => {
+    grouped[category.id] = getRolesByCategory(category.id);
+  });
+  
+  return grouped;
+}
+
+// 카테고리 정보 조회
+export function getCategoryById(categoryId: string): RoleCategory | undefined {
+  return ROLE_CATEGORIES.find(cat => cat.id === categoryId);
 }
