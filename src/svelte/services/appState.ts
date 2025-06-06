@@ -1,138 +1,71 @@
-import { initializeApp } from './app';
-import { authState } from '../stores/auth.svelte';
-import { setError, clearError } from '../stores/ui.svelte';
-import type { AuthState } from '../stores/auth.svelte';
+/**
+ * 앱 상태 관리자 - 전역 상태와 이벤트 처리
+ * 모달 관리는 modalService로 분리됨
+ */
 
-interface ModalState {
-  showAuthModal: boolean;
-  showModelModal: boolean;
-  showRoleModal: boolean;
-}
+import { appService } from './appService';
+import { modalService } from './modalService';
+import { setError, clearError } from '../stores/ui.svelte';
 
 export class AppStateManager {
-  private modalState: ModalState = {
-    showAuthModal: false,
-    showModelModal: false,
-    showRoleModal: false
-  };
-
-  private modalSubscribers: ((state: ModalState) => void)[] = [];
-
   constructor() {
     this.initializeGlobalAPI();
   }
 
-  // 모달 상태 구독
-  subscribeToModals(callback: (state: ModalState) => void) {
-    this.modalSubscribers.push(callback);
-    callback(this.modalState); // 초기 상태 전달
-    
-    return () => {
-      const index = this.modalSubscribers.indexOf(callback);
-      if (index > -1) {
-        this.modalSubscribers.splice(index, 1);
-      }
-    };
-  }
-
-  private notifyModalSubscribers() {
-    this.modalSubscribers.forEach(callback => callback(this.modalState));
-  }
-
-  // 모달 제어 메서드들
-  showAuthModal() {
-    this.modalState.showAuthModal = true;
-    this.notifyModalSubscribers();
-  }
-
-  hideAuthModal() {
-    this.modalState.showAuthModal = false;
-    this.notifyModalSubscribers();
-  }
-
-  showModelModal() {
-    this.modalState.showModelModal = true;
-    this.notifyModalSubscribers();
-  }
-
-  hideModelModal() {
-    this.modalState.showModelModal = false;
-    this.notifyModalSubscribers();
-  }
-
-  showRoleModal() {
-    this.modalState.showRoleModal = true;
-    this.notifyModalSubscribers();
-  }
-
-  hideRoleModal() {
-    this.modalState.showRoleModal = false;
-    this.notifyModalSubscribers();
-  }
-
-  // 헤더 클릭 이벤트 처리
-  async handleModelClick() {
-    if (authState.isAuthenticated) {
-      this.showModelModal();
-    } else {
-      this.showAuthModal();
-    }
-  }
-
-  async handleRoleClick() {
-    if (authState.isAuthenticated) {
-      this.showRoleModal();
-    } else {
-      this.showAuthModal();
-    }
-  }
-
-  // 모달 이벤트 핸들러들
-  async handleAuthSuccess() {
-    this.hideAuthModal();
+  /**
+   * 모달 이벤트 핸들러들
+   */
+  async handleAuthSuccess(): Promise<void> {
+    modalService.hideAuthModal();
     clearError();
     try {
-      await initializeApp();
+      await appService.initialize();
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Initialization failed');
     }
   }
 
-  handleModelSelect() {
-    this.hideModelModal();
+  handleModelSelect(): void {
+    modalService.hideModelModal();
     // 모델 선택 로직은 ModelModal 컴포넌트에서 처리
   }
 
-  handleRoleSelect() {
-    this.hideRoleModal();
+  handleRoleSelect(): void {
+    modalService.hideRoleModal();
     // 역할 선택 로직은 RoleModal 컴포넌트에서 처리
   }
 
-  // 스크롤 처리
-  handleScrollToBottom() {
+  /**
+   * 스크롤 처리
+   */
+  handleScrollToBottom(): void {
     const chatArea = document.querySelector('.chat-area');
     if (chatArea) {
       chatArea.scrollTop = chatArea.scrollHeight;
     }
   }
 
-  // 전역 API 초기화 (기존 코드와의 호환성)
-  private initializeGlobalAPI() {
+  /**
+   * 전역 API 초기화 (기존 코드와의 호환성)
+   */
+  private initializeGlobalAPI(): void {
     (window as any).svelteApp = {
-      showAuthModal: () => this.showAuthModal(),
-      showModelModal: () => this.showModelModal(),
-      showRoleModal: () => this.showRoleModal(),
+      showAuthModal: () => modalService.showAuthModal(),
+      showModelModal: () => modalService.showModelModal(),
+      showRoleModal: () => modalService.showRoleModal(),
       sendMessage: (message: string) => {
         // ChatInput 컴포넌트로 전달하는 로직
-        // console.log('Global sendMessage called:', message);
+        console.log('Global sendMessage called:', message);
       }
     };
   }
 
-  // 앱 초기화
-  async initialize() {
+  /**
+   * 앱 초기화
+   */
+  async initialize(): Promise<void> {
     try {
-      await initializeApp();
+      await appService.initialize();
     } catch (error) {
       setError(error instanceof Error ? error.message : 'App initialization failed');
     }

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { rolesState } from '../stores/roles.svelte';
-  import { apiClient } from '../services/api.js';
+  import { apiClient } from '../services/apiClient';
   import { updateRoles } from '../stores/roles.svelte';
   import { setError } from '../stores/ui.svelte';
   import { ROLE_CATEGORIES, getRolesGroupedByCategory, getCategoryById, type RoleCategory } from '../../roles.js';

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { modelsState } from '../stores/models.svelte';
   import { updateModels } from '../stores/models.svelte';
-  import { apiClient } from '../services/api.js';
+  import { apiClient } from '../services/apiClient';
   import { setError } from '../stores/ui.svelte';
 
   // Svelte 5 props 시스템 사용

@@ -1,8 +1,10 @@
-import { apiClient } from './api.js';
+import { apiClient } from './apiClient';
 import { addMessage } from '../stores/messages.svelte';
 import { setLoading } from '../stores/ui.svelte';
-import { initializeApp } from './app.js';
+import { appService } from './appService';
 import type { ChatMessage } from '../stores/messages.svelte';
+import { COMMANDS, MESSAGE_TYPES } from './constants';
+import { generateMessageId } from './utils';
 
 export class ChatService {
   /**
@@ -19,7 +21,7 @@ export class ChatService {
       setLoading(true);
 
       // 로그인 명령어 처리
-      if (content.startsWith('/login ')) {
+      if (content.startsWith(COMMANDS.LOGIN_PREFIX)) {
         await this.handleLoginCommand(content);
       } else {
         // 일반 채팅 메시지 처리
@@ -41,7 +43,7 @@ export class ChatService {
    */
   private addUserMessage(content: string): void {
     const message: ChatMessage = {
-      id: this.generateMessageId(),
+      id: generateMessageId(),
       role: 'user',
       content: content,
       timestamp: new Date()
@@ -52,9 +54,9 @@ export class ChatService {
   /**
    * 시스템 메시지 추가
    */
-  private addSystemMessage(content: string, type: 'success' | 'error' = 'error'): void {
+  private addSystemMessage(content: string, type: 'success' | 'error' = MESSAGE_TYPES.ERROR): void {
     const message: ChatMessage = {
-      id: this.generateMessageId(),
+      id: generateMessageId(),
       role: 'system',
       content: content,
       timestamp: new Date(),
@@ -68,7 +70,7 @@ export class ChatService {
    */
   private addAssistantMessage(content: string, model?: string, tokenUsage?: any): void {
     const message: ChatMessage = {
-      id: this.generateMessageId(),
+      id: generateMessageId(),
       role: 'assistant',
       content: content,
       timestamp: new Date(),
@@ -86,12 +88,12 @@ export class ChatService {
     
     if (result.success) {
       this.addSystemMessage(
-        result.data.message || 'Login successful',
+        result.data?.message || 'Login successful',
         'success'
       );
       
       // 인증 상태 업데이트
-      await initializeApp();
+      await appService.initialize();
     } else {
       this.addSystemMessage(
         result.error || 'Login failed',
@@ -123,12 +125,7 @@ export class ChatService {
     }
   }
 
-  /**
-   * 메시지 ID 생성
-   */
-  private generateMessageId(): string {
-    return `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  }
+
 }
 
 // 싱글톤 인스턴스

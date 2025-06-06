@@ -9,17 +9,20 @@ import roles from './routes/roles';
 import context from './routes/context';
 import staticFiles from './routes/static';
 import packageJson from '../package.json';
-import { contextManager } from './services/context-manager';
+import { contextManager } from './services/context';
 
 const app = new Hono<{ Bindings: Env }>();
 
+// Context Manager 초기화 미들웨어
 app.use('*', async (c, next) => {
-  contextManager.setDatabase(c.env.DB);
+  contextManager.initialize(c.env);
   await next();
 });
 
+// 보안 미들웨어 적용
 app.use('*', securityMiddleware);
 
+// CORS 설정
 app.use('*', cors({
   origin: (origin) => {
     if (!origin) return origin;
@@ -48,6 +51,7 @@ app.use('*', cors({
   maxAge: 86400,
 }));
 
+// 헬스 체크 엔드포인트
 app.get('/health', (c) => {
   return c.json({
     status: 'ok',
@@ -56,12 +60,14 @@ app.get('/health', (c) => {
   });
 });
 
-app.route('/api', auth);     // Authentication routes
-app.route('/api', models);   // Model management routes
-app.route('/api', roles);    // Role management routes
-app.route('/api', context);  // Context management routes
-app.route('/api', chat);     // Chat and other routes
+// 라우트 등록
+app.route('/api', auth);     // 인증 라우트
+app.route('/api', models);   // 모델 관리 라우트
+app.route('/api', roles);    // 역할 관리 라우트
+app.route('/api', context);  // 컨텍스트 관리 라우트
+app.route('/api', chat);     // 채팅 라우트
 
+// 정적 파일 라우트 (catch-all)
 app.route('*', staticFiles);
 
 export default app;

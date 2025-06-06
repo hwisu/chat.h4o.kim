@@ -83,3 +83,106 @@ export interface ChatCompletionResponse {
   usage?: Usage;
   system_fingerprint?: string;
 }
+
+// =============================================================================
+// API Request/Response Types - 클라이언트와 서버 간 공통 타입
+// =============================================================================
+
+// 기본 API 응답 형식
+export interface ApiResponse<T = any> {
+  success?: boolean;
+  response?: string;
+  error?: string;
+  data?: T;
+}
+
+// 인증 관련
+export interface LoginRequest {
+  password: string;
+}
+
+export interface LoginResponse extends ApiResponse {
+  login_success?: boolean;
+  login_failed?: boolean;
+  session_token?: string;
+}
+
+export interface AuthStatusResponse extends ApiResponse {
+  authenticated: boolean;
+  method?: 'server' | 'api-key';
+  contextUsage?: string;
+}
+
+// API 키 관련
+export interface SetApiKeyRequest {
+  apiKey: string;
+}
+
+export interface SetApiKeyResponse extends ApiResponse {
+  success: boolean;
+}
+
+// 모델 관련
+export interface ModelInfo {
+  id: string;
+  name: string;
+  provider: string;
+  context_length?: number;
+  selected?: boolean;
+}
+
+export interface ModelsResponse extends ApiResponse {
+  models: ModelInfo[];
+}
+
+export interface SetModelRequest {
+  model: string;
+}
+
+export interface SetModelResponse extends ApiResponse {
+  success: boolean;
+}
+
+// 역할 관련
+export interface RoleInfo {
+  id: string;
+  name: string;
+  description?: string;
+  selected?: boolean;
+}
+
+export interface RolesResponse extends ApiResponse {
+  roles: RoleInfo[];
+}
+
+export interface SetRoleRequest {
+  role: string;
+}
+
+export interface SetRoleResponse extends ApiResponse {
+  success: boolean;
+}
+
+// 채팅 관련
+export interface ChatRequest {
+  message: string;
+}
+
+export interface ChatResponse extends ApiResponse {
+  response?: string;
+  model?: string;
+  usage?: Usage;
+}
+
+// 컨텍스트 관련
+export interface ContextInfo {
+  usage?: string;
+  maxSize?: number;
+  currentSize?: number;
+}
+
+export interface ContextResponse extends ApiResponse {
+  usage?: string;
+  maxSize?: number;
+  currentSize?: number;
+}
