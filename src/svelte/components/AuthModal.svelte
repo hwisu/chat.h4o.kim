@@ -15,7 +15,7 @@
     onClose?.();
   }
 
-  function handleBackdropClick(event) {
+  function handleBackdropClick(event: MouseEvent) {
     if (event.target === event.currentTarget) {
       close();
     }
@@ -68,7 +68,7 @@
     isLoading = false;
   }
 
-  function handleKeydown(event) {
+  function handleKeydown(event: KeyboardEvent) {
     if (event.key === 'Escape') {
       close();
     } else if (event.key === 'Enter') {
@@ -101,28 +101,40 @@
     <div class="auth-modal-body">
       <!-- 인증 방법 선택 -->
       <div class="auth-method-selector">
-        <label class="auth-method-option">
+        <label class="auth-method-option {authMethod === 'server' ? 'selected' : ''}">
           <input 
             type="radio" 
             bind:group={authMethod} 
             value="server"
+            class="auth-radio-input"
           />
-          <span class="auth-method-label">
-            🔐 Server Login
-            <small>Authenticate with server password</small>
-          </span>
+          <div class="auth-radio-custom"></div>
+          <div class="auth-method-content">
+            <div class="auth-method-title">
+              🔐 Server Login
+            </div>
+            <div class="auth-method-description">
+              Authenticate with server password
+            </div>
+          </div>
         </label>
 
-        <label class="auth-method-option">
+        <label class="auth-method-option {authMethod === 'api-key' ? 'selected' : ''}">
           <input 
             type="radio" 
             bind:group={authMethod} 
             value="api-key"
+            class="auth-radio-input"
           />
-          <span class="auth-method-label">
-            🔑 Personal API Key
-            <small>Use your own OpenRouter API key</small>
-          </span>
+          <div class="auth-radio-custom"></div>
+          <div class="auth-method-content">
+            <div class="auth-method-title">
+              🔑 Personal API Key
+            </div>
+            <div class="auth-method-description">
+              Use your own OpenRouter API key
+            </div>
+          </div>
         </label>
       </div>
 
@@ -248,19 +260,21 @@
   .auth-method-selector {
     display: flex;
     flex-direction: column;
-    gap: 15px;
+    gap: 12px;
     margin-bottom: 25px;
   }
 
   .auth-method-option {
+    position: relative;
     display: flex;
     align-items: flex-start;
-    gap: 10px;
+    gap: 12px;
     cursor: pointer;
-    padding: 15px;
-    border: 1px solid #333;
-    border-radius: 6px;
+    padding: 16px;
+    border: 2px solid #333;
+    border-radius: 8px;
     transition: all 0.2s;
+    background: rgba(255, 255, 255, 0.02);
   }
 
   .auth-method-option:hover {
@@ -268,19 +282,79 @@
     border-color: #555;
   }
 
-  .auth-method-option input[type="radio"] {
+  .auth-method-option.selected {
+    border-color: #4CAF50;
+    background: rgba(76, 175, 80, 0.08);
+  }
+
+  /* 기본 라디오 버튼 숨기기 */
+  .auth-radio-input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  /* 커스텀 라디오 버튼 */
+  .auth-radio-custom {
+    position: relative;
+    width: 20px;
+    height: 20px;
+    border: 2px solid #555;
+    border-radius: 50%;
+    background: #222;
+    transition: all 0.2s;
+    flex-shrink: 0;
     margin-top: 2px;
   }
 
-  .auth-method-label {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+  .auth-method-option:hover .auth-radio-custom {
+    border-color: #777;
   }
 
-  .auth-method-label small {
-    color: #888;
-    font-size: 12px;
+  .auth-method-option.selected .auth-radio-custom {
+    border-color: #4CAF50;
+    background: #4CAF50;
+  }
+
+  .auth-method-option.selected .auth-radio-custom::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 8px;
+    height: 8px;
+    background: #111;
+    border-radius: 50%;
+  }
+
+  .auth-method-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .auth-method-title {
+    font-size: 16px;
+    font-weight: 500;
+    color: #eee;
+    line-height: 1.3;
+  }
+
+  .auth-method-description {
+    font-size: 13px;
+    color: #aaa;
+    line-height: 1.4;
+  }
+
+  .auth-method-option.selected .auth-method-title {
+    color: #fff;
+  }
+
+  .auth-method-option.selected .auth-method-description {
+    color: #ccc;
   }
 
   .auth-form {
@@ -306,7 +380,7 @@
 
   .auth-form input:focus {
     outline: none;
-    border-color: #00ff00;
+    border-color: #4CAF50;
   }
 
   .auth-form input:disabled {
@@ -320,7 +394,7 @@
   }
 
   .api-key-help a {
-    color: #00ff00;
+    color: #4CAF50;
     text-decoration: none;
   }
 
@@ -329,10 +403,10 @@
   }
 
   .auth-submit-btn {
-    background: #00ff00;
-    color: #000;
+    background: #4CAF50;
+    color: #fff;
     border: none;
-    border-radius: 4px;
+    border-radius: 6px;
     padding: 12px 20px;
     font-size: 14px;
     font-weight: 500;
@@ -341,7 +415,7 @@
   }
 
   .auth-submit-btn:hover:not(:disabled) {
-    background: #00dd00;
+    background: #45a049;
   }
 
   .auth-submit-btn:disabled {

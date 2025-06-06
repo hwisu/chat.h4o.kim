@@ -124,7 +124,7 @@
                   <span class="category-icon">{category.icon}</span>
                   <div class="category-text">
                     <span class="category-name">{category.name}</span>
-                    <span class="category-count">({categoryRoles.length}개)</span>
+                    <span class="category-count">({categoryRoles.length} roles)</span>
                   </div>
                 </div>
                 <span class="category-toggle {expandedCategories.has(category.id) ? 'expanded' : ''}">

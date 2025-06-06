@@ -10,7 +10,7 @@
     "svelte-dev": "vite",
     "dev-all": "./scripts/dev.sh",
     "type-check": "tsc --noEmit",
-    "deploy": "wrangler deploy"
+    "deploy": "vite build && wrangler deploy"
   },
   "keywords": [
     "cloudflare-workers",

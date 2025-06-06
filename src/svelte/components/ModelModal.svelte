@@ -10,75 +10,99 @@
   let isLoading = $state(false);
   let expandedFamilies = $state(new Set<string>());
 
-  // 모델 패밀리 정의
-  const MODEL_FAMILIES = {
-    'anthropic': {
-      name: 'Anthropic',
-      icon: '🔵',
-      description: 'Claude 모델 시리즈'
-    },
-    'openai': {
-      name: 'OpenAI',
-      icon: '🟢',
-      description: 'GPT 모델 시리즈'
-    },
-    'google': {
-      name: 'Google',
-      icon: '🔴',
-      description: 'Gemini 모델 시리즈'
-    },
-    'meta': {
-      name: 'Meta',
-      icon: '🔶',
-      description: 'Llama 모델 시리즈'
-    },
-    'mistral': {
-      name: 'Mistral',
-      icon: '🟡',
-      description: 'Mistral 모델 시리즈'
-    },
-    'cohere': {
-      name: 'Cohere',
-      icon: '🟣',
-      description: 'Command 모델 시리즈'
-    },
-    'other': {
-      name: '기타',
-      icon: '⚪',
-      description: '기타 모델들'
-    }
-  };
-
-  // 모델을 패밀리별로 그룹화
-  let groupedModels = $derived(() => {
-    const grouped: { [family: string]: any[] } = {};
+  // 모델명에서 prefix 추출 (/ 앞의 첫 번째 단어)
+  function extractModelPrefix(modelName: string): string {
+    if (!modelName) return 'other';
     
-    Object.keys(MODEL_FAMILIES).forEach(family => {
-      grouped[family] = [];
+    const slashIndex = modelName.indexOf('/');
+    if (slashIndex === -1) return 'other';
+    
+    return modelName.substring(0, slashIndex).toLowerCase();
+  }
+
+  // prefix를 표시용으로 포맷팅
+  function formatPrefixName(prefix: string): string {
+    if (prefix === 'other') return 'Other Models';
+    
+    // 첫 글자를 대문자로, 나머지는 그대로
+    return prefix.charAt(0).toUpperCase() + prefix.slice(1);
+  }
+
+  // prefix별 아이콘 (간단한 해시 기반)
+  function getPrefixIcon(prefix: string): string {
+    if (prefix === 'other') return '⚪';
+    
+    // 단순한 해시로 일관된 아이콘 선택
+    const icons = ['🔵', '🟢', '🔴', '🔶', '🟡', '🟣', '🔷', '🟠', '⭐', '💙'];
+    let hash = 0;
+    for (let i = 0; i < prefix.length; i++) {
+      hash = ((hash << 5) - hash) + prefix.charCodeAt(i);
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    return icons[Math.abs(hash) % icons.length];
+  }
+
+  // 모델을 prefix별로 그룹화 (4개 이상인 것만)
+  let groupedModels = $derived(() => {
+    const prefixCount: { [prefix: string]: any[] } = {};
+    
+    // 먼저 모든 prefix별로 모델 수집
+    modelsState.available.forEach(model => {
+      const modelName = model.name || model.id || '';
+      const prefix = extractModelPrefix(modelName);
+      
+      if (!prefixCount[prefix]) {
+        prefixCount[prefix] = [];
+      }
+      
+      prefixCount[prefix].push(model);
     });
 
-    modelsState.available.forEach(model => {
-      const modelName = model.name?.toLowerCase() || model.id?.toLowerCase() || '';
-      let family = 'other';
+    // 4개 이상인 prefix만 유지, 나머지는 'other'로 이동
+    const grouped: { [prefix: string]: any[] } = {};
+    const otherModels: any[] = [];
 
-      if (modelName.includes('claude') || modelName.includes('anthropic')) {
-        family = 'anthropic';
-      } else if (modelName.includes('gpt') || modelName.includes('openai')) {
-        family = 'openai';
-      } else if (modelName.includes('gemini') || modelName.includes('google')) {
-        family = 'google';
-      } else if (modelName.includes('llama') || modelName.includes('meta')) {
-        family = 'meta';
-      } else if (modelName.includes('mistral')) {
-        family = 'mistral';
-      } else if (modelName.includes('cohere') || modelName.includes('command')) {
-        family = 'cohere';
+    Object.entries(prefixCount).forEach(([prefix, models]) => {
+      if (models.length >= 4) {
+        grouped[prefix] = models;
+      } else {
+        otherModels.push(...models);
       }
+    });
 
-      grouped[family].push(model);
+    // 'other' 그룹이 있다면 추가
+    if (otherModels.length > 0) {
+      grouped['other'] = otherModels;
+    }
+
+    // 각 그룹의 모델들을 이름순으로 정렬
+    Object.keys(grouped).forEach(prefix => {
+      grouped[prefix].sort((a, b) => {
+        const nameA = a.name || a.id || '';
+        const nameB = b.name || b.id || '';
+        return nameA.localeCompare(nameB);
+      });
     });
 
     return grouped;
+  });
+
+  // prefix 목록을 정렬 (모델 수가 많은 순, 그 다음 이름순, other는 항상 마지막)
+  let sortedPrefixes = $derived(() => {
+    const prefixes = Object.keys(groupedModels());
+    
+    return prefixes.sort((a, b) => {
+      // 'other'는 항상 마지막
+      if (a === 'other') return 1;
+      if (b === 'other') return -1;
+      
+      // 모델 수가 많은 순
+      const countDiff = (groupedModels()[b]?.length || 0) - (groupedModels()[a]?.length || 0);
+      if (countDiff !== 0) return countDiff;
+      
+      // 이름순
+      return formatPrefixName(a).localeCompare(formatPrefixName(b));
+    });
   });
 
   function close() {
@@ -91,11 +115,11 @@
     }
   }
 
-  function toggleFamily(familyId: string) {
-    if (expandedFamilies.has(familyId)) {
-      expandedFamilies.delete(familyId);
+  function toggleFamily(prefixId: string) {
+    if (expandedFamilies.has(prefixId)) {
+      expandedFamilies.delete(prefixId);
     } else {
-      expandedFamilies.add(familyId);
+      expandedFamilies.add(prefixId);
     }
     expandedFamilies = new Set(expandedFamilies);
   }
@@ -173,30 +197,30 @@
           No models available. Please check your authentication.
         </div>
       {:else}
-        {#each Object.entries(MODEL_FAMILIES) as [familyId, family]}
-          {@const familyModels = groupedModels()[familyId] || []}
-          {#if familyModels.length > 0}
+        {#each sortedPrefixes() as prefixId}
+          {@const prefixModels = groupedModels()[prefixId] || []}
+          {#if prefixModels.length > 0}
             <div class="family-section">
               <button 
                 class="family-header"
-                onclick={() => toggleFamily(familyId)}
-                aria-expanded={expandedFamilies.has(familyId)}
+                onclick={() => toggleFamily(prefixId)}
+                aria-expanded={expandedFamilies.has(prefixId)}
               >
                 <div class="family-info">
-                  <span class="family-icon">{family.icon}</span>
+                  <span class="family-icon">{getPrefixIcon(prefixId)}</span>
                   <div class="family-text">
-                    <span class="family-name">{family.name}</span>
-                    <span class="family-count">({familyModels.length}개)</span>
+                    <span class="family-name">{formatPrefixName(prefixId)}</span>
+                    <span class="family-count">({prefixModels.length} models)</span>
                   </div>
                 </div>
-                <span class="family-toggle {expandedFamilies.has(familyId) ? 'expanded' : ''}">
+                <span class="family-toggle {expandedFamilies.has(prefixId) ? 'expanded' : ''}">
                   ▼
                 </span>
               </button>
               
-              {#if expandedFamilies.has(familyId)}
+              {#if expandedFamilies.has(prefixId)}
                 <div class="family-models">
-                  {#each familyModels as model}
+                  {#each prefixModels as model}
                     <button 
                       class="model-list-item {model.id === modelsState.selected ? 'selected' : ''}"
                       onclick={() => selectModel(model.id)}
