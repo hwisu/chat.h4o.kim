@@ -1,16 +1,20 @@
 {
   "name": "Chatty",
-  "version": "1.0.16",
+  "version": "1.0.18",
   "description": "Terminal-style chat interface using OpenRouter free models with Korean language optimization",
   "main": "src/index.ts",
   "type": "module",
   "scripts": {
     "build": "vite build",
+    "build:analyze": "vite build --mode production && npm run analyze",
+    "analyze": "npx vite-bundle-analyzer public/svelte",
     "dev": "wrangler dev",
     "svelte-dev": "vite",
     "dev-all": "./scripts/dev.sh",
     "type-check": "tsc --noEmit",
-    "deploy": "vite build && wrangler deploy"
+    "deploy": "npm run build:analyze && wrangler deploy",
+    "size-check": "npm run build && du -sh public/svelte/*",
+    "clean": "rm -rf public/svelte .wrangler/tmp"
   },
   "keywords": [
     "cloudflare-workers",
@@ -25,10 +29,13 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241218.0",
     "@sveltejs/vite-plugin-svelte": "^5.1.0",
+    "rollup-plugin-analyzer": "^4.0.0",
     "svelte": "^5.33.14",
     "svelte-loader": "^3.2.4",
     "typescript": "^5.3.0",
     "vite": "^6.3.5",
+    "vite-bundle-analyzer": "^0.22.0",
+    "vite-plugin-eslint": "^1.8.1",
     "webpack": "^5.99.9",
     "webpack-cli": "^6.0.1",
     "webpack-dev-server": "^5.2.2",

@@ -213,9 +213,11 @@
     border-radius: 8px;
     width: 90%;
     max-width: 500px;
+    min-height: 580px;
     max-height: 90vh;
     overflow-y: auto;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    transition: none; /* 크기 변화 애니메이션 제거 */
   }
 
   .auth-modal-header {
@@ -255,6 +257,9 @@
 
   .auth-modal-body {
     padding: 20px;
+    min-height: 440px; /* 콘텐츠 영역 최소 높이 고정 */
+    display: flex;
+    flex-direction: column;
   }
 
   .auth-method-selector {
@@ -361,6 +366,8 @@
     display: flex;
     flex-direction: column;
     gap: 15px;
+    flex: 1; /* 남은 공간을 차지하여 일정한 높이 유지 */
+    justify-content: flex-start;
   }
 
   .auth-form label {

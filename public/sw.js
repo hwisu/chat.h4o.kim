@@ -1,4 +1,4 @@
-const CACHE_NAME = 'chatty-v1.0.17';
+const CACHE_NAME = 'chatty-v1.0.18';
 const urlsToCache = [
   '/',
   '/svelte/bundle.js',

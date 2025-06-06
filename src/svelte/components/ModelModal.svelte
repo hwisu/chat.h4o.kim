@@ -10,36 +10,42 @@
   let isLoading = $state(false);
   let expandedFamilies = $state(new Set<string>());
 
-  // 모델명에서 prefix 추출 (/ 앞의 첫 번째 단어)
-  function extractModelPrefix(modelName: string): string {
-    if (!modelName) return 'other';
+  // 모델 ID에서 / 다음 첫 번째 단어 추출
+  function extractModelPrefix(modelId: string): string {
+    if (!modelId) return 'other';
     
-    const slashIndex = modelName.indexOf('/');
+    const slashIndex = modelId.indexOf('/');
     if (slashIndex === -1) return 'other';
     
-    return modelName.substring(0, slashIndex).toLowerCase();
+    const afterSlash = modelId.substring(slashIndex + 1);
+    const firstWord = afterSlash.split(/[-:\s]/)[0];
+    
+    return firstWord.toLowerCase();
   }
 
-  // prefix를 표시용으로 포맷팅
-  function formatPrefixName(prefix: string): string {
-    if (prefix === 'other') return 'Other Models';
+  // prefix별 색상 (간단한 해시 기반)
+  function getPrefixColor(prefix: string): string {
+    if (prefix === 'other') return '#6b7280'; // 회색
     
-    // 첫 글자를 대문자로, 나머지는 그대로
-    return prefix.charAt(0).toUpperCase() + prefix.slice(1);
-  }
-
-  // prefix별 아이콘 (간단한 해시 기반)
-  function getPrefixIcon(prefix: string): string {
-    if (prefix === 'other') return '⚪';
-    
-    // 단순한 해시로 일관된 아이콘 선택
-    const icons = ['🔵', '🟢', '🔴', '🔶', '🟡', '🟣', '🔷', '🟠', '⭐', '💙'];
+    // 단순한 해시로 일관된 색상 선택
+    const colors = [
+      '#3b82f6', // blue
+      '#10b981', // emerald  
+      '#ef4444', // red
+      '#f59e0b', // amber
+      '#8b5cf6', // violet
+      '#06b6d4', // cyan
+      '#84cc16', // lime
+      '#f97316', // orange
+      '#ec4899', // pink
+      '#6366f1'  // indigo
+    ];
     let hash = 0;
     for (let i = 0; i < prefix.length; i++) {
       hash = ((hash << 5) - hash) + prefix.charCodeAt(i);
       hash = hash & hash; // Convert to 32bit integer
     }
-    return icons[Math.abs(hash) % icons.length];
+    return colors[Math.abs(hash) % colors.length];
   }
 
   // 모델을 prefix별로 그룹화 (4개 이상인 것만)
@@ -48,8 +54,8 @@
     
     // 먼저 모든 prefix별로 모델 수집
     modelsState.available.forEach(model => {
-      const modelName = model.name || model.id || '';
-      const prefix = extractModelPrefix(modelName);
+      const modelId = model.id || '';
+      const prefix = extractModelPrefix(modelId);
       
       if (!prefixCount[prefix]) {
         prefixCount[prefix] = [];
@@ -63,7 +69,7 @@
     const otherModels: any[] = [];
 
     Object.entries(prefixCount).forEach(([prefix, models]) => {
-      if (models.length >= 4) {
+      if (models.length >= 3) {
         grouped[prefix] = models;
       } else {
         otherModels.push(...models);
@@ -101,7 +107,7 @@
       if (countDiff !== 0) return countDiff;
       
       // 이름순
-      return formatPrefixName(a).localeCompare(formatPrefixName(b));
+      return a.localeCompare(b);
     });
   });
 
@@ -207,9 +213,9 @@
                 aria-expanded={expandedFamilies.has(prefixId)}
               >
                 <div class="family-info">
-                  <span class="family-icon">{getPrefixIcon(prefixId)}</span>
+                  <span class="family-icon" style="background-color: {getPrefixColor(prefixId)}"></span>
                   <div class="family-text">
-                    <span class="family-name">{formatPrefixName(prefixId)}</span>
+                    <span class="family-name">{prefixId}</span>
                     <span class="family-count">({prefixModels.length} models)</span>
                   </div>
                 </div>
@@ -371,7 +377,11 @@
   }
 
   .family-icon {
-    font-size: 20px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
   }
 
   .family-text {
