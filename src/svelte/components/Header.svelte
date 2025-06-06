@@ -49,12 +49,13 @@ import { contextState } from '../stores/context.svelte';
     }
   });
 
-  function getContextUsagePercentage(): string {
+  function getContextUsageText(): string {
+    const contextSize = Math.round(modelsState.selectedInfo.contextSize / 1000);
     if (contextState.currentSize > 0 && modelsState.selectedInfo.contextSize > 0) {
       const percentage = (contextState.currentSize / modelsState.selectedInfo.contextSize) * 100;
-      return `${Math.round(percentage)}%`;
+      return `${contextSize}K (${Math.round(percentage)}%)`;
     }
-    return '0%';
+    return `${contextSize}K (0%)`;
   }
 </script>
 
@@ -82,7 +83,7 @@ import { contextState } from '../stores/context.svelte';
   
   <div class="header-right">
     <div class="context-info">
-      {Math.round(modelsState.selectedInfo.contextSize / 1000)}K ({getContextUsagePercentage()})
+      {getContextUsageText()}
     </div>
   </div>
 </div>

@@ -116,10 +116,18 @@
   :global(html) {
     scroll-behavior: smooth;
     scroll-padding-top: 60px;
+    /* 모바일 키보드 최적화 */
+    -webkit-text-size-adjust: 100%;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   :global(body) {
     scroll-behavior: smooth;
+    /* 모바일 터치 최적화 */
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
   }
 
   .app {

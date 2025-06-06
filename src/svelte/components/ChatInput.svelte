@@ -63,11 +63,16 @@ import { uiState } from '../stores/ui.svelte';
       spellcheck="false"
       inputmode="text"
       enterkeyhint="send"
+      data-ms-editor="false"
+      data-gramm="false"
+      data-gramm_editor="false"
+      data-enable-grammarly="false"
       placeholder="Type your message..."
       oninput={handleInput}
       onkeydown={handleKeydown}
       disabled={uiState.isLoading}
       aria-label="Chat message input"
+      style="font-variant-ligatures: none;"
     ></textarea>
     
     <button 
@@ -102,6 +107,12 @@ import { uiState } from '../stores/ui.svelte';
     border-top-left-radius: 12px;
     border-top-right-radius: 12px;
     padding: 16px;
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+    
+    /* 모바일 키보드 대응 */
+    contain: layout style;
+    transform: translateZ(0);
+    will-change: transform;
   }
 
   .input-wrapper {
@@ -127,6 +138,13 @@ import { uiState } from '../stores/ui.svelte';
     min-height: 44px;
     max-height: 120px;
     overflow-y: auto;
+    
+    /* 모바일 키보드 예측 텍스트 비활성화 */
+    -webkit-user-select: text;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    font-variant-ligatures: none;
+    text-rendering: optimizeSpeed;
   }
 
   .chat-input:focus {
