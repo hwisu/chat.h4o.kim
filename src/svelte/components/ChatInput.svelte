@@ -1,7 +1,7 @@
 <script lang="ts">
   import { messagesState } from '../stores/messages.svelte';
 import { uiState } from '../stores/ui.svelte';
-  import { chatService } from '../services/chatService.js';
+  import { chatService } from '../services/chatService';
 
   // Svelte 5 props 시스템 사용
   let { onScrollToBottom } = $props();

@@ -3,35 +3,8 @@ import { Env } from '../types';
 
 const staticFiles = new Hono<{ Bindings: Env }>();
 
-// Serve static files with proper fallback
-async function serveStaticFile(c: any, fileName: string = 'index.html') {
-  // console.log('STATIC HANDLER: Serving file =', fileName); // 빈번한 로그 제거
-
-  try {
-    // Check if ASSETS binding is available (for production)
-    if (c.env.ASSETS) {
-      const url = new URL(c.req.url);
-      url.pathname = `/${fileName}`;
-      const response = await c.env.ASSETS.fetch(url);
-
-      if (response.ok) {
-        return response;
-      }
-
-      // If file not found, serve index.html for SPA fallback
-      if (response.status === 404 && fileName !== 'index.html') {
-        url.pathname = '/index.html';
-        const fallbackResponse = await c.env.ASSETS.fetch(url);
-        if (fallbackResponse.ok) {
-          return fallbackResponse;
-        }
-      }
-
-      return response;
-    } else {
-      // Fallback for local development
-      // console.log('ASSETS binding not available, returning fallback message'); // 개발용 로그 제거
-      return c.html(`
+// Development fallback HTML
+const DEV_FALLBACK_HTML = `
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -67,10 +40,6 @@ async function serveStaticFile(c: any, fileName: string = 'index.html') {
             line-height: 1.6;
             margin-bottom: 20px;
         }
-        .link {
-            color: #0088ff;
-            text-decoration: underline;
-        }
     </style>
 </head>
 <body>
@@ -84,7 +53,34 @@ async function serveStaticFile(c: any, fileName: string = 'index.html') {
     </div>
 </body>
 </html>
-      `);
+`;
+
+// Serve static file with SPA fallback support
+async function serveStaticFile(c: any, fileName: string = 'index.html'): Promise<Response> {
+  try {
+    // Production: Use ASSETS binding
+    if (c.env.ASSETS) {
+      const url = new URL(c.req.url);
+      url.pathname = `/${fileName}`;
+      const response = await c.env.ASSETS.fetch(url);
+
+      if (response.ok) {
+        return response;
+      }
+
+      // Fallback to index.html for SPA routing
+      if (response.status === 404 && fileName !== 'index.html') {
+        url.pathname = '/index.html';
+        const fallbackResponse = await c.env.ASSETS.fetch(url);
+        if (fallbackResponse.ok) {
+          return fallbackResponse;
+        }
+      }
+
+      return response;
+    } else {
+      // Development: Return fallback HTML
+      return c.html(DEV_FALLBACK_HTML);
     }
   } catch (error) {
     console.error('Error serving static file:', error);
@@ -93,29 +89,24 @@ async function serveStaticFile(c: any, fileName: string = 'index.html') {
   }
 }
 
-// Serve index.html for root and SPA fallback
-staticFiles.get('/', async (c) => {
-  // console.log('STATIC HANDLER: Root path requested'); // 빈번한 로그 제거
-  return serveStaticFile(c, 'index.html');
-});
+// Route handlers
+staticFiles.get('/', async (c) => serveStaticFile(c, 'index.html'));
+staticFiles.get('/index.html', async (c) => serveStaticFile(c, 'index.html'));
 
-// Serve index.html explicitly
-staticFiles.get('/index.html', async (c) => {
-  // console.log('STATIC HANDLER: index.html requested'); // 빈번한 로그 제거
-  return serveStaticFile(c, 'index.html');
-});
-
-
-// Handle all other routes with SPA fallback
+// Catch-all for SPA routing and asset serving
 staticFiles.get('*', async (c) => {
   const path = c.req.path;
   console.log('STATIC HANDLER: Catch-all for path =', path);
 
-  // Try to serve the requested file first
-  if (path !== '/' && !path.startsWith('/api/')) {
+  // Skip API routes
+  if (path.startsWith('/api/')) {
+    return c.notFound();
+  }
+
+  // Try to serve the specific file first
+  if (path !== '/') {
     const fileName = path.startsWith('/') ? path.slice(1) : path;
 
-    // Try to serve the specific file
     try {
       if (c.env.ASSETS) {
         const url = new URL(c.req.url);
@@ -130,7 +121,7 @@ staticFiles.get('*', async (c) => {
     }
   }
 
-  // Fall back to index.html for SPA routing
+  // Fallback to index.html for SPA routing
   return serveStaticFile(c, 'index.html');
 });
 

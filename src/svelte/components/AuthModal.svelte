@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { loginUser, setUserApiKey } from '../services/app.js';
+  import { loginUser, setUserApiKey } from '../services/appService';
   import { setError, clearError } from '../stores/ui.svelte';
 
   // Svelte 5 props 시스템 사용
