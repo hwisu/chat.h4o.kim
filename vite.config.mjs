@@ -36,9 +36,6 @@ export default defineConfig(({ command, mode }) => {
             
             // 소스 코드를 기능별로 분리
             if (id.includes('/components/')) {
-              if (id.includes('Modal.svelte')) {
-                return 'modals';
-              }
               return 'components';
             }
             

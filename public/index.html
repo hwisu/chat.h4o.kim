@@ -24,13 +24,13 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23000'/%3E%3Ctext y='70' font-size='60' fill='%2300ff00'%3E$%3C/text%3E%3C/svg%3E">
     <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' fill='%23000' rx='20'/%3E%3Ctext x='90' y='110' text-anchor='middle' font-size='100' fill='%2300ff00'%3E$%3C/text%3E%3C/svg%3E">
 
-    <!-- Critical Resource Preloads -->
+    <!-- Critical Resource Preloads - Only essential resources -->
     <link rel="preconnect" href="https://fastly.jsdelivr.net" crossorigin>
-    <link rel="preload" href="/svelte/main.css" as="style">
-    <link rel="preload" href="/svelte/components.css" as="style">
-    <link rel="preload" href="/svelte/bundle.js" as="script">
+    <!-- Only preload critical CSS that's immediately used -->
+    <link rel="preload" href="/svelte/main.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="/svelte/main.css"></noscript>
     
-    <!-- Font Preload (기존 유지) -->
+    <!-- Font Preload - Critical for rendering -->
     <link rel="preload" href="https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_Monoplex-nerd@1.0/MonoplexKRNerd-Bold.woff2" as="font" type="font/woff2" crossorigin>
     
     <!-- 모노플렉스Nerd 폰트 -->
@@ -101,15 +101,6 @@
             50% { opacity: 1; }
         }
     </style>
-    
-    <!-- Critical CSS First -->
-    <link rel="stylesheet" href="/svelte/main.css">
-    <link rel="stylesheet" href="/svelte/components.css">
-    <!-- Non-critical CSS with media preload trick -->
-    <link rel="preload" href="/svelte/modals.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript>
-        <link rel="stylesheet" href="/svelte/modals.css">
-    </noscript>
 </head>
 <body>
     <!-- Loading Screen -->
@@ -120,21 +111,37 @@
     <!-- Svelte 앱이 전체 UI를 담당 -->
     <div id="svelte-app"></div>
 
-    <!-- Critical JavaScript First -->
-    <script type="module" src="/svelte/bundle.js"></script>
-
     <!-- Deferred External Libraries -->
     <script>
-        // Defer non-critical libraries
+        // Efficiently load CSS and JS resources
+        function loadCSS(href) {
+            const link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = href;
+            document.head.appendChild(link);
+            return link;
+        }
+        
         function loadScript(src) {
             const script = document.createElement('script');
             script.src = src;
             script.defer = true;
             document.head.appendChild(script);
+            return script;
         }
         
-        // Load LZ-String when needed (not immediately)
+        // Load critical CSS immediately
+        loadCSS('/svelte/components.css');
+        
+        // Load main script immediately
+        const mainScript = document.createElement('script');
+        mainScript.type = 'module';
+        mainScript.src = '/svelte/bundle.js';
+        document.head.appendChild(mainScript);
+        
+        // Load non-critical resources after page load
         window.addEventListener('load', () => {
+            // Load LZ-String when needed (not immediately)
             loadScript('https://unpkg.com/lz-string@1.5.0/libs/lz-string.min.js');
             
             // Hide loading overlay after app loads
@@ -152,13 +159,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js')
-                    .then((registration) => {
-                        console.log('SW registered: ', registration);
-                    })
-                    .catch((registrationError) => {
-                        console.log('SW registration failed: ', registrationError);
-                    });
+                        navigator.serviceWorker.register('/sw.js');
             });
         }
     </script>

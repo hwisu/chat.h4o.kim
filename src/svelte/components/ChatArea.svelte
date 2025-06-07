@@ -1,9 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { messagesState } from '../stores/messages.svelte';
-import { authState } from '../stores/auth.svelte';
-import { uiState } from '../stores/ui.svelte';
+  import { authState } from '../stores/auth.svelte';
+  import { uiState } from '../stores/ui.svelte';
   import ChatMessage from './ChatMessage.svelte';
+  import { getWelcomeMessage } from '../services/utils';
 
   let chatContainer: HTMLDivElement;
 
@@ -46,15 +47,7 @@ import { uiState } from '../stores/ui.svelte';
     scrollToBottom();
   });
 
-  // 환영 메시지 생성
-  function getWelcomeMessage() {
-    return `🌟 Welcome to Chat.h4o!
 
-🔐 To get started, click on the Model button to authenticate
-🎭 After authentication, you can select your preferred AI model and role
-
-💡 Authentication required to access AI models and chat features`;
-  }
 </script>
 
 <div class="chat-output" bind:this={chatContainer}>

@@ -86,12 +86,6 @@ export class ChatService {
    * AI 응답 메시지 추가
    */
   private addAssistantMessage(content: string, model?: string, tokenUsage?: any): void {
-    console.log('[ChatService] addAssistantMessage called with:', {
-      contentLength: content.length,
-      model: model,
-      tokenUsage: tokenUsage
-    });
-
     const message: ChatMessage = {
       id: generateMessageId(),
       role: 'assistant',
@@ -102,7 +96,6 @@ export class ChatService {
       tokenUsage: tokenUsage
     };
 
-    console.log('[ChatService] Final message object:', message);
     addMessage(message);
   }
 
@@ -151,13 +144,7 @@ export class ChatService {
   private async handleChatMessage(content: string): Promise<void> {
     const result = await apiClient.sendMessage(content);
 
-    console.log('[ChatService] API result:', result);
-
     if (result.success && result.data) {
-      console.log('[ChatService] Response data:', result.data);
-      console.log('[ChatService] Usage field:', result.data.usage);
-      console.log('[ChatService] Model field:', result.data.model);
-
       if (result.data.response) {
         this.addAssistantMessage(
           result.data.response,
@@ -165,7 +152,7 @@ export class ChatService {
           result.data.usage
         );
       } else {
-        console.warn('No response content in API response:', result.data);
+
         this.addSystemMessage(
           'Received empty response from AI',
           'error'

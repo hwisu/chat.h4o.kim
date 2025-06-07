@@ -29,30 +29,22 @@ export class AppService {
    */
   async initialize(): Promise<void> {
     try {
-      console.log('[AppService] Initialization starting...');
       setLoading(true);
       clearError();
       
       // 1. 로컬 저장된 인증 정보 복원
-      console.log('[AppService] Restoring auth from storage...');
       apiClient.restoreAuth();
       
       // 2. 서버 인증 상태 확인 (한 번만)
-      console.log('[AppService] Checking authentication status...');
       const isAuthenticated = await this.checkAuthenticationStatus();
       
       // 3. 인증된 경우 필요한 데이터 로드
       if (isAuthenticated) {
-        console.log('[AppService] Authenticated - loading data...');
         await this.loadAllData();
-      } else {
-        console.log('[AppService] Not authenticated - skipping data load');
       }
       
       // 4. 시스템 메시지 표시
       this.showWelcomeMessage();
-      
-      console.log('[AppService] Initialization completed');
     } catch (error) {
       console.error('[AppService] App initialization failed:', error);
       setError(`Failed to initialize app: ${extractErrorMessage(error)}`);
@@ -77,13 +69,10 @@ export class AppService {
    */
   async checkAuthenticationStatus(): Promise<boolean> {
     try {
-      console.log('[AppService] Checking auth status with server...');
       const result = await apiClient.checkAuthStatus();
       
       if (result.success && result.data) {
         const { authenticated, method, contextUsage } = result.data;
-        
-        console.log('[AppService] Auth status response:', { authenticated, method, contextUsage });
         
         updateAuth({
           isAuthenticated: authenticated,
@@ -95,10 +84,8 @@ export class AppService {
           updateContext({ usage: contextUsage });
         }
         
-        console.log('[AppService] Auth state updated:', { isAuthenticated: authenticated });
         return authenticated;
       } else {
-        console.log('[AppService] Auth status check failed:', result.error);
         this.setUnauthenticatedState();
         return false;
       }
@@ -159,7 +146,7 @@ export class AppService {
    */
   private updateSelectedModel(models: ModelInfo[]): void {
     if (!isNonEmptyArray(models)) {
-      console.warn('No models available for selection');
+      
       return;
     }
     
@@ -215,7 +202,7 @@ export class AppService {
    */
   private updateSelectedRole(roles: RoleInfo[]): void {
     if (!isNonEmptyArray(roles)) {
-      console.warn('No roles available for selection');
+      
       return;
     }
     
