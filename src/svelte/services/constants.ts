@@ -14,7 +14,8 @@ export const API_ENDPOINTS = {
   ROLES: '/api/roles',
   SET_ROLE: '/api/set-role',
   CHAT: '/api/chat',
-  CONTEXT: '/api/context'
+  CONTEXT: '/api/context',
+  HELP: '/api/help'
 } as const;
 
 export const DEFAULT_VALUES = {

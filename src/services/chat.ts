@@ -362,14 +362,8 @@ export async function processChatMessage(
 export function getHelpMessage(): string {
   return `🤖 **Chatty H4O Assistant**
 
-**Main Commands:**
+**Available Commands:**
 • \`/login <password>\` - Login with server password
-• \`/models\` - List available AI models  
-• \`/set-model <id>\` - Set specific model
-• \`/set-model auto\` - Use auto-selection
-• \`/roles\` - List available AI roles
-• \`/set-role <role-id>\` - Set AI personality
-• \`/clear\` - Clear conversation history
 • \`/help\` - Show this help message
 
 **Features:**
@@ -379,11 +373,15 @@ export function getHelpMessage(): string {
 • 🎭 Multiple AI personalities
 • 🔐 Secure authentication
 
+**Interface Options:**
+• Click Model button to select AI models
+• Click Role button to change AI personality
+• Header displays current context usage
+
 **Tips:**
-• Use auto model selection for best results
-• Try different roles for varied responses
-• Clear context if conversation gets too long
-• Login required for most features
+• Use the interface buttons for model and role selection
+• Login required to access AI features
+• Context is automatically managed for optimal performance
 
 Type your message to start chatting!`;
 } 
