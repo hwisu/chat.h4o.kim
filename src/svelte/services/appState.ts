@@ -47,17 +47,14 @@ export class AppStateManager {
    * 기존 이벤트 핸들러들
    */
   async handleAuthSuccess(): Promise<void> {
-    console.log('[AppStateManager] Auth success - starting...');
     modalService.refreshAfterAuth();
     clearError();
     // Hide the system message after successful authentication
     uiState.showSystemMessage = false;
-    console.log('[AppStateManager] Auth success - loading data...');
     try {
       // Instead of re-initializing the entire app, just load the necessary data
       // since authentication state is already updated by the login process
       await appService.loadAllData();
-      console.log('[AppStateManager] Auth success - data loaded successfully');
     } catch (error) {
       console.error('[AppStateManager] Auth success - data loading failed:', error);
       setError(error instanceof Error ? error.message : 'Data loading failed after authentication');
@@ -94,7 +91,7 @@ export class AppStateManager {
       showRoleModal: () => modalService.showRoleModal(),
       sendMessage: (message: string) => {
         // ChatInput 컴포넌트로 전달하는 로직
-        console.log('Global sendMessage called:', message);
+        // 실제 구현은 ChatInput에서 처리
       }
     };
   }

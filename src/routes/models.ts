@@ -25,9 +25,14 @@ function transformToModelInfo(openRouterModel: OpenRouterModel, isSelected: bool
     provider = openRouterModel.id.split('/')[0];
   }
 
+  // Clean model name - remove (free) tags and :free suffixes
+  let cleanName = openRouterModel.name;
+  cleanName = cleanName.replace(/\s*\(free\)\s*$/i, '');
+  cleanName = cleanName.replace(/:free\s*$/i, '');
+
   return {
     id: openRouterModel.id,
-    name: openRouterModel.name,
+    name: cleanName,
     provider,
     context_length: openRouterModel.context_length,
     selected: isSelected

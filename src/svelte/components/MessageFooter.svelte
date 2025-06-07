@@ -14,9 +14,7 @@
 
   let { tokenUsage, content }: Props = $props();
 
-  console.log('[MessageFooter] Received tokenUsage:', tokenUsage);
-  console.log('[MessageFooter] TokenUsage type:', typeof tokenUsage);
-  console.log('[MessageFooter] TokenUsage keys:', tokenUsage ? Object.keys(tokenUsage) : 'null/undefined');
+
 
   function formatTokens(tokens: number): string {
     if (tokens < 1000) {

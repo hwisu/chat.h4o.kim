@@ -14,11 +14,9 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
-        console.log('Service Worker: Caching files');
         return cache.addAll(urlsToCache);
       })
       .then(() => {
-        console.log('Service Worker: All files cached');
         return self.skipWaiting();
       })
   );
@@ -31,13 +29,11 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheName !== CACHE_NAME) {
-            console.log('Service Worker: Clearing old cache');
             return caches.delete(cacheName);
           }
         })
       );
     }).then(() => {
-      console.log('Service Worker: Activated');
       return self.clients.claim();
     })
   );
@@ -73,8 +69,8 @@ self.addEventListener('fetch', (event) => {
                   !event.request.url.startsWith('moz-extension://') &&
                   !event.request.url.startsWith('safari-extension://') &&
                   !event.request.url.startsWith('ms-browser-extension://')) {
-                cache.put(event.request, responseClone).catch((error) => {
-                  console.log('Cache put failed:', error);
+                cache.put(event.request, responseClone).catch(() => {
+                  // Cache put failed - silently handled
                 });
               }
             });

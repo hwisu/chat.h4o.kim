@@ -143,9 +143,7 @@ export class ApiClient {
       // 서버가 성공 응답을 보낸 경우
       if (serverResponse.success && serverResponse.data) {
         const loginData = serverResponse.data;
-        console.log('[DEBUG] Login data:', JSON.stringify(loginData, null, 2));
-        console.log('[DEBUG] login_success type:', typeof loginData.login_success, 'value:', loginData.login_success);
-        console.log('[DEBUG] session_token type:', typeof loginData.session_token, 'exists:', !!loginData.session_token);
+        
         
         if (loginData.login_success && loginData.session_token) {
           this.authInfo.sessionToken = loginData.session_token;
@@ -155,13 +153,6 @@ export class ApiClient {
             ...loginData, 
             success: true, 
             message: serverResponse.message || loginData.response || 'Login successful' 
-          });
-        } else {
-          console.log('[DEBUG] Login condition failed:', {
-            hasLoginSuccess: !!loginData.login_success,
-            hasSessionToken: !!loginData.session_token,
-            loginSuccessValue: loginData.login_success,
-            sessionTokenValue: loginData.session_token
           });
         }
       }
@@ -317,12 +308,7 @@ export class ApiClient {
     const sessionToken = sessionStorage.getItem(STORAGE_KEYS.SESSION_TOKEN);
     const userApiKey = localStorage.getItem(STORAGE_KEYS.USER_API_KEY);
     
-    console.log('[ApiClient] Restoring auth:', {
-      hasSessionToken: !!sessionToken,
-      hasUserApiKey: !!userApiKey,
-      sessionTokenLength: sessionToken?.length || 0,
-      userApiKeyLength: userApiKey?.length || 0
-    });
+
     
     this.authInfo.sessionToken = sessionToken;
     this.authInfo.userApiKey = userApiKey;

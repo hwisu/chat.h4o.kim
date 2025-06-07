@@ -133,7 +133,7 @@ export async function authenticateUser(
   if (!password) {
     return {
       success: false,
-      message: `❌ Password is required.\n\nUsage: /login <password>`
+      message: `Password is required`
     };
   }
 
@@ -154,13 +154,13 @@ export async function authenticateUser(
       console.error('Token creation failed:', error);
       return {
         success: false,
-        message: `❌ Authentication system error. Please try again.`
+        message: `Authentication system error. Please try again.`
       };
     }
   } else {
     return {
       success: false,
-      message: `❌ Authentication failed. Invalid password.\n\nUsage: /login <password>`
+      message: `Invalid password`
     };
   }
 }

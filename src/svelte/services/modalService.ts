@@ -63,20 +63,9 @@ export class ModalService {
    * 인증 성공 후 상태 새로고침
    */
   refreshAfterAuth(): void {
-    console.log('[ModalService] Refreshing after authentication...');
     // Force close auth modal and ensure state is clean
     this.modalState.showAuthModal = false;
     this.notifySubscribers();
-    
-    // Log current auth state for debugging
-    const currentAuthState = authState;
-    console.log('[ModalService] Auth state after refresh:', {
-      isAuthenticated: currentAuthState.isAuthenticated,
-      status: currentAuthState.status,
-      method: currentAuthState.method,
-      hasSessionToken: !!currentAuthState.sessionToken,
-      hasApiKey: !!currentAuthState.userApiKey
-    });
   }
 
   /**

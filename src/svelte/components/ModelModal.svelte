@@ -143,7 +143,7 @@
           updateModels({
             selected: modelId,
             selectedInfo: {
-              name: selectedModel.name,
+              name: formatModelName(selectedModel),
               provider: selectedModel.provider,
               contextSize: selectedModel.context_length || 128000
             }
@@ -171,7 +171,12 @@
   // 모델 이름 포맷팅
   function formatModelName(model: any) {
     if (!model) return '';
-    return model.name || model.id || 'Unknown Model';
+    let name = model.name || model.id || 'Unknown Model';
+    // (free) 태그 제거
+    name = name.replace(/\s*\(free\)\s*$/i, '');
+    // :free 접미사도 제거
+    name = name.replace(/:free\s*$/i, '');
+    return name;
   }
 </script>
 
@@ -236,6 +241,9 @@
                       <div class="model-info">
                         <div class="model-name">
                           {formatModelName(model)}
+                          {#if model.id && model.id.includes(':free')}
+                            <span class="model-free-tag">:free</span>
+                          {/if}
                           {#if model.context_length}
                             <span class="model-context">({Math.round(model.context_length / 1000)}K)</span>
                           {/if}
@@ -470,6 +478,16 @@
     font-size: 12px;
     color: #888;
     font-weight: 400;
+  }
+
+  .model-free-tag {
+    font-size: 11px;
+    color: #4CAF50;
+    font-weight: 500;
+    background: rgba(76, 175, 80, 0.1);
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 8px;
   }
 
   .model-selected-indicator {

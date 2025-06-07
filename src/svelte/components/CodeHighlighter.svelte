@@ -23,7 +23,7 @@
       const module = await import('highlight.js');
       hljs = module.default;
       isHighlightLoaded = true;
-      console.log('✅ Highlight.js (full) loaded dynamically');
+
       return hljs;
     } catch (error) {
       console.warn('❌ Failed to load highlight.js:', error);
@@ -137,7 +137,7 @@
         block.classList.remove('needs-highlight');
         block.classList.add('hljs');
       } catch (error) {
-        console.warn('Failed to highlight code block:', error);
+
         block.classList.remove('needs-highlight');
       }
     }
@@ -240,12 +240,7 @@
   {@html processedContent}
 </div>
 
-<!-- highlight.js CSS는 동적으로 로드 -->
-<svelte:head>
-  {#if isHighlightLoaded}
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">
-  {/if}
-</svelte:head>
+
 
 <style>
   .code-highlighter {
@@ -264,9 +259,7 @@
     color: #DCD7BA; /* fujiWhite - 어시스턴트 텍스트 */
   }
 
-  .code-highlighter :global(p) {
-    color: inherit;
-  }
+
 
   /* 인라인 코드 */
   .code-highlighter :global(code:not(pre code)) {

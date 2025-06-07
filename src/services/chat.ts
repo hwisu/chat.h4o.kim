@@ -117,11 +117,9 @@ export async function processContextAndSummary(
 
   if (needsSummary) {
     try {
-      console.log(`🔄 Starting auto-summarization for ${chatMessages.length} messages (${actualTokenCount} tokens)`);
       summaryData = await processSummarization(chatMessages, apiKey, undefined, currentUserModel);
       finalMessages = summaryData.remainingMessages;
       finalSummary = summaryData.summary;
-      console.log(`✅ Auto-summarization completed: ${summaryData.summarizedMessageCount} messages summarized`);
     } catch (error) {
       console.warn('❌ Auto-summary failed, proceeding without summary:', error instanceof Error ? error.message : error);
     }
@@ -278,8 +276,7 @@ export async function processChatMessage(
     throw new ChatError('Message content is required', 'EMPTY_MESSAGE');
   }
 
-  console.log('🎭 Current role:', currentRole);
-  console.log('🤖 System prompt preview:', getSystemPromptPreview(systemPrompt));
+
 
   try {
     // 사용자 메시지를 컨텍스트에 추가

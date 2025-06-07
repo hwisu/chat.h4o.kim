@@ -51,7 +51,7 @@ roles.post('/set-role', authRequired, asyncHandler(async (c) => {
   const sessionId = getSessionId(c);
   setUserRole(sessionId, roleId);
 
-  console.log(`🎭 Role set: ${sessionId} -> ${roleId}`);
+
 
   return successResponse(c, {
     role: getPublicRoleInfo(role)

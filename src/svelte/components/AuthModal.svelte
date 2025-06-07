@@ -92,9 +92,9 @@
   aria-labelledby="auth-modal-title"
   tabindex="0"
 >
-  <div class="auth-modal-content">
+  <div class="auth-modal-content {error ? 'error-state' : ''}">
     <div class="auth-modal-header">
-      <h3 id="auth-modal-title">🔐 Choose Authentication Method</h3>
+      <h3 id="auth-modal-title">Authentication</h3>
       <button class="auth-modal-close" onclick={close} aria-label="Close">&times;</button>
     </div>
 
@@ -110,12 +110,8 @@
           />
           <div class="auth-radio-custom"></div>
           <div class="auth-method-content">
-            <div class="auth-method-title">
-              🔐 Server Login
-            </div>
-            <div class="auth-method-description">
-              Authenticate with server password
-            </div>
+            <div class="auth-method-title">Server Login</div>
+            <div class="auth-method-description">Authenticate with password</div>
           </div>
         </label>
 
@@ -128,12 +124,8 @@
           />
           <div class="auth-radio-custom"></div>
           <div class="auth-method-content">
-            <div class="auth-method-title">
-              🔑 Personal API Key
-            </div>
-            <div class="auth-method-description">
-              Use your own OpenRouter API key
-            </div>
+            <div class="auth-method-title">Personal API Key</div>
+            <div class="auth-method-description">Use your OpenRouter API key</div>
           </div>
         </label>
       </div>
@@ -141,12 +133,12 @@
       <!-- 서버 로그인 폼 -->
       {#if authMethod === 'server'}
         <div class="auth-form">
-          <label for="password">Server Password:</label>
+          <label for="password">Password:</label>
           <input 
             id="password"
             type="password" 
             bind:value={password}
-            placeholder="Enter server password"
+            placeholder="Enter password"
             disabled={isLoading}
           />
           <button 
@@ -162,7 +154,7 @@
       <!-- API 키 입력 폼 -->
       {#if authMethod === 'api-key'}
         <div class="auth-form">
-          <label for="api-key">OpenRouter API Key:</label>
+          <label for="api-key">API Key:</label>
           <input 
             id="api-key"
             type="password" 
@@ -171,7 +163,7 @@
             disabled={isLoading}
           />
           <small class="api-key-help">
-            Get your API key from <a href="https://openrouter.ai/settings/keys" target="_blank">OpenRouter</a>
+            Get your key from <a href="https://openrouter.ai/settings/keys" target="_blank">OpenRouter</a>
           </small>
           <button 
             class="auth-submit-btn"
@@ -183,12 +175,7 @@
         </div>
       {/if}
 
-      <!-- 에러 메시지 -->
-      {#if error}
-        <div class="auth-error">
-          {error}
-        </div>
-      {/if}
+
     </div>
   </div>
 </div>
@@ -210,28 +197,33 @@
   .auth-modal-content {
     background: #111;
     border: 1px solid #333;
-    border-radius: 8px;
+    border-radius: 12px;
     width: 90%;
-    max-width: 500px;
-    min-height: 580px;
+    max-width: 420px;
     max-height: 90vh;
     overflow-y: auto;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-    transition: none; /* 크기 변화 애니메이션 제거 */
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+    transition: all 0.3s ease;
+  }
+
+  .auth-modal-content.error-state {
+    border-color: #ff4444;
+    box-shadow: 0 8px 32px rgba(255, 68, 68, 0.2);
   }
 
   .auth-modal-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 20px;
+    padding: 24px 24px 20px 24px;
     border-bottom: 1px solid #333;
   }
 
   .auth-modal-header h3 {
     margin: 0;
-    font-size: 18px;
-    color: #eee;
+    font-size: 20px;
+    font-weight: 600;
+    color: #fff;
   }
 
   .auth-modal-close {
@@ -256,17 +248,16 @@
   }
 
   .auth-modal-body {
-    padding: 20px;
-    min-height: 440px; /* 콘텐츠 영역 최소 높이 고정 */
+    padding: 24px;
     display: flex;
     flex-direction: column;
+    gap: 24px;
   }
 
   .auth-method-selector {
     display: flex;
     flex-direction: column;
     gap: 12px;
-    margin-bottom: 25px;
   }
 
   .auth-method-option {
@@ -276,7 +267,7 @@
     gap: 12px;
     cursor: pointer;
     padding: 16px;
-    border: 2px solid #333;
+    border: 1px solid #333;
     border-radius: 8px;
     transition: all 0.2s;
     background: rgba(255, 255, 255, 0.02);
@@ -365,9 +356,7 @@
   .auth-form {
     display: flex;
     flex-direction: column;
-    gap: 15px;
-    flex: 1; /* 남은 공간을 차지하여 일정한 높이 유지 */
-    justify-content: flex-start;
+    gap: 16px;
   }
 
   .auth-form label {
@@ -376,18 +365,20 @@
   }
 
   .auth-form input {
-    background: #222;
-    border: 1px solid #444;
-    border-radius: 4px;
-    padding: 12px;
-    color: #eee;
+    background: #1a1a1a;
+    border: 1px solid #404040;
+    border-radius: 8px;
+    padding: 12px 16px;
+    color: #fff;
     font-size: 14px;
-    transition: border-color 0.2s;
+    transition: all 0.2s;
   }
 
   .auth-form input:focus {
     outline: none;
     border-color: #4CAF50;
+    background: #0f0f0f;
+    box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
   }
 
   .auth-form input:disabled {
@@ -398,6 +389,7 @@
   .api-key-help {
     color: #888;
     font-size: 12px;
+    margin-top: -8px;
   }
 
   .api-key-help a {
@@ -413,12 +405,13 @@
     background: #4CAF50;
     color: #fff;
     border: none;
-    border-radius: 6px;
-    padding: 12px 20px;
+    border-radius: 8px;
+    padding: 14px 20px;
     font-size: 14px;
-    font-weight: 500;
+    font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
+    margin-top: 8px;
   }
 
   .auth-submit-btn:hover:not(:disabled) {
@@ -434,10 +427,10 @@
   .auth-error {
     background: rgba(255, 68, 68, 0.1);
     border: 1px solid rgba(255, 68, 68, 0.3);
-    border-radius: 4px;
-    padding: 12px;
+    border-radius: 8px;
+    padding: 12px 16px;
     color: #ff6b6b;
     font-size: 14px;
-    margin-top: 15px;
+    font-weight: 500;
   }
 </style> 
