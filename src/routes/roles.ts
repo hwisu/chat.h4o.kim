@@ -1,35 +1,26 @@
 import { Hono } from 'hono';
-import { Env } from '../types';
-import { AVAILABLE_ROLES, getRoleById, getPublicRoleInfo } from '../roles';
 import { authRequired } from '../middleware/auth';
-import { RESPONSE_MESSAGES, HTTP_STATUS } from './constants';
-import { successResponse, errorResponse, asyncHandler, parseJsonBody } from './utils';
+import { AVAILABLE_ROLES, getPublicRoleInfo, getRoleById } from '../roles';
+import { Env } from '../types';
+import { ErrorStatus, RESPONSE_MESSAGES } from './constants';
+import { asyncHandler, errorResponse, parseJsonBody, successResponse } from './utils';
 
 const roles = new Hono<{ Bindings: Env }>();
 
-// In-memory role storage for sessions
+// In-memory role storage for users
 const userRoles = new Map<string, string>();
 
 // Helper functions
-function getUserRole(sessionId: string): string {
-  return userRoles.get(sessionId) || 'general';
+function getUserRole(userId: string): string {
+  return userRoles.get(userId) || 'general';
 }
 
-function setUserRole(sessionId: string, roleId: string): void {
-  userRoles.set(sessionId, roleId);
-}
-
-function getSessionId(c: any): string {
-  const sessionToken = c.req.header('X-Session-Token');
-  if (sessionToken) return sessionToken;
-  
-  return c.req.header('CF-Connecting-IP') || 
-         c.req.header('X-Forwarded-For') || 
-         'anonymous';
+function setUserRole(userId: string, roleId: string): void {
+  userRoles.set(userId, roleId);
 }
 
 // Export for use in other modules
-export { getUserRole, getSessionId };
+export { getUserRole };
 
 // Get available roles
 roles.get('/roles', authRequired, asyncHandler(async (c) => {
@@ -44,14 +35,12 @@ roles.post('/set-role', authRequired, asyncHandler(async (c) => {
   // Validate role exists
   const role = getRoleById(roleId);
   if (!role) {
-    return errorResponse(c, RESPONSE_MESSAGES.INVALID_ROLE(roleId), HTTP_STATUS.BAD_REQUEST);
+    return errorResponse(c, RESPONSE_MESSAGES.INVALID_ROLE(roleId), ErrorStatus.BAD_REQUEST);
   }
 
-  // Store role for session
-  const sessionId = getSessionId(c);
-  setUserRole(sessionId, roleId);
-
-
+  // Store role for user
+  const userId = c.get('userId') || 'anonymous';
+  setUserRole(userId, roleId);
 
   return successResponse(c, {
     role: getPublicRoleInfo(role)

@@ -1,16 +1,20 @@
 import { Context } from 'hono';
-import { HTTP_STATUS } from './constants';
+import { HttpStatus, ErrorStatus, ErrorStatusCode } from './constants';
 
-// Standard API Response Types - 이제 types.ts와 통일됨
-export interface ApiResponse<T = any> {
+// Standard API Response Types
+export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
   message?: string;
   error?: string;
 }
 
-// Success Response Helper
-export function successResponse<T>(c: Context, data?: T, message?: string) {
+// Success Response Helper with improved type safety
+export function successResponse<T>(
+  c: Context, 
+  data?: T, 
+  message?: string
+): Response {
   const response: ApiResponse<T> = {
     success: true,
     ...(data !== undefined && { data }),
@@ -19,68 +23,110 @@ export function successResponse<T>(c: Context, data?: T, message?: string) {
   return c.json(response);
 }
 
-// Error Response Helper
-export function errorResponse(c: Context, message: string, statusCode: number = HTTP_STATUS.INTERNAL_ERROR, data?: any) {
+// Error Response Helper with proper Hono StatusCode typing
+export function errorResponse(
+  c: Context, 
+  message: string, 
+  statusCode: ErrorStatusCode = ErrorStatus.INTERNAL_ERROR, 
+  data?: unknown
+): Response {
   const response: ApiResponse = {
     success: false,
     error: message,
-    ...(data && { data })
+    ...(data !== undefined && data !== null && { data })
   };
-  return c.json(response, statusCode as any);
+  
+  c.status(statusCode);
+  return c.json(response);
 }
 
-// Async Error Handler Wrapper
-export function asyncHandler(fn: (c: Context) => Promise<Response>) {
-  return async (c: Context) => {
+// Async Error Handler Wrapper with improved error handling
+export function asyncHandler(
+  fn: (c: Context) => Promise<Response>
+): (c: Context) => Promise<Response> {
+  return async (c: Context): Promise<Response> => {
     try {
       return await fn(c);
     } catch (error) {
       console.error('Route error:', error);
       const message = error instanceof Error ? error.message : 'Internal server error';
-      return errorResponse(c, message, HTTP_STATUS.INTERNAL_ERROR);
+      return errorResponse(c, message, ErrorStatus.INTERNAL_ERROR);
     }
   };
 }
 
-// Request Body Parser with Validation
-export async function parseJsonBody<T>(c: Context, requiredFields?: (keyof T)[]): Promise<T> {
+// Request Body Parser with improved type safety
+export async function parseJsonBody<T extends Record<string, unknown>>(
+  c: Context, 
+  requiredFields?: Array<keyof T>
+): Promise<T> {
   try {
     const body = await c.req.json() as T;
     
-    if (requiredFields) {
-      for (const field of requiredFields) {
-        if (body[field] === undefined || body[field] === null) {
-          throw new Error(`Missing required field: ${String(field)}`);
-        }
+    if (requiredFields?.length) {
+      const missingFields = requiredFields.filter(
+        field => body[field] === undefined || body[field] === null
+      );
+      
+      if (missingFields.length > 0) {
+        throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
       }
     }
     
     return body;
   } catch (error) {
-    throw new Error('Invalid request format');
+    const message = error instanceof Error ? error.message : 'Invalid request format';
+    throw new Error(message);
   }
 }
 
-// Cookie Helper
-export function setCookie(c: Context, name: string, value: string, maxAge?: number) {
-  const cookieValue = maxAge === 0 
-    ? `${name}=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict`
-    : `${name}=${encodeURIComponent(value)}; Path=/; Max-Age=${maxAge || 86400}; HttpOnly; SameSite=Strict`;
+// Cookie helper functions with improved type safety
+export function getCookieValue(c: Context, name: string): string | undefined {
+  const cookie = c.req.header('Cookie');
   
-  c.header('Set-Cookie', cookieValue);
+  if (!cookie) return undefined;
+  
+  const match = cookie
+    .split(';')
+    .find(cookie => cookie.trim().startsWith(`${name}=`));
+    
+  return match?.split('=')[1]?.trim();
 }
 
-// Get Cookie Helper
-export function getCookieValue(c: Context, name: string): string | null {
-  const cookies = c.req.header('Cookie');
-  if (!cookies?.includes(`${name}=`)) {
-    return null;
-  }
-  return decodeURIComponent(cookies.split(`${name}=`)[1]?.split(';')[0] || '');
+export function setCookie(
+  c: Context, 
+  name: string, 
+  value: string, 
+  options: {
+    maxAge?: number;
+    httpOnly?: boolean;
+    secure?: boolean;
+    sameSite?: 'Strict' | 'Lax' | 'None';
+  } = {}
+): void {
+  const { maxAge = 86400, httpOnly = true, secure = true, sameSite = 'Strict' } = options;
+  
+  const cookieString = [
+    `${name}=${value}`,
+    `Max-Age=${maxAge}`,
+    `Path=/`,
+    httpOnly && 'HttpOnly',
+    secure && 'Secure',
+    `SameSite=${sameSite}`
+  ].filter(Boolean).join('; ');
+  
+  c.header('Set-Cookie', cookieString);
 }
 
-// Timeout Handler for Fetch Requests
-export async function fetchWithTimeout(url: string, options: RequestInit & { timeout?: number }) {
+// Request timeout helper for external API calls
+interface FetchWithTimeoutOptions extends RequestInit {
+  timeout?: number;
+}
+
+export async function fetchWithTimeout(
+  url: string, 
+  options: FetchWithTimeoutOptions = {}
+): Promise<Response> {
   const { timeout = 3000, ...fetchOptions } = options;
   
   const controller = new AbortController();
@@ -92,6 +138,11 @@ export async function fetchWithTimeout(url: string, options: RequestInit & { tim
       signal: controller.signal
     });
     return response;
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`Request timeout after ${timeout}ms`);
+    }
+    throw error;
   } finally {
     clearTimeout(timeoutId);
   }

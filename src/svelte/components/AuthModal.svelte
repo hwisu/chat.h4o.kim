@@ -1,6 +1,7 @@
 <script lang="ts">
   import { loginUser, setUserApiKey } from '../services/appService';
-  import { setError, clearError } from '../stores/ui.svelte';
+  import { clearError } from '../stores/ui.svelte';
+  import { createModalHandlers } from '../utils/modalUtils';
 
   // Svelte 5 props 시스템 사용
   let { onClose, onSuccess } = $props();
@@ -11,15 +12,21 @@
   let isLoading = $state(false);
   let error = $state('');
 
-  function close() {
-    onClose?.();
-  }
-
-  function handleBackdropClick(event: MouseEvent) {
-    if (event.target === event.currentTarget) {
-      close();
+  // 모달 공통 핸들러 생성
+  const modalHandlers = createModalHandlers(
+    { onClose },
+    (event: KeyboardEvent) => {
+      if (event.key === 'Enter') {
+        if (authMethod === 'server') {
+          handleServerLogin();
+        } else {
+          handleApiKeyAuth();
+        }
+      }
     }
-  }
+  );
+  
+  const { close, handleBackdropClick, handleKeydown } = modalHandlers;
 
   async function handleServerLogin() {
     if (!password.trim()) {
@@ -68,17 +75,7 @@
     isLoading = false;
   }
 
-  function handleKeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape') {
-      close();
-    } else if (event.key === 'Enter') {
-      if (authMethod === 'server') {
-        handleServerLogin();
-      } else {
-        handleApiKeyAuth();
-      }
-    }
-  }
+  // handleKeydown은 modalHandlers에서 처리됨
 </script>
 
 <svelte:window onkeydown={handleKeydown} />

@@ -1,5 +1,4 @@
-import { Env, ChatMessage } from '../types';
-import { getUserId } from './auth';
+import { ChatMessage, Env } from '../types';
 
 // Constants
 const DEFAULT_MAX_TOKENS = 100000;

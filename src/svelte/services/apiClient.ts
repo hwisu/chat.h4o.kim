@@ -2,21 +2,18 @@
  * API 클라이언트 - 서버와의 HTTP 통신을 담당
  */
 
-import type { 
-  ServiceApiResponse, 
-  AuthInfo, 
-  ModelInfo, 
-  RoleInfo, 
-  ChatResponseData, 
-  LoginResponseData, 
+import { API_ENDPOINTS, STORAGE_KEYS } from './constants';
+import type {
+  ApiResponse,
+  AuthInfo,
   AuthStatusData,
-  ModelsResponseData,
-  RolesResponseData,
-  SetApiKeyResponseData,
-  ContextData,
-  ApiResponse
+  ChatResponseData,
+  LoginResponseData,
+  ModelInfo,
+  RoleInfo,
+  ServiceApiResponse,
+  SetApiKeyResponseData
 } from './types';
-import { STORAGE_KEYS, API_ENDPOINTS } from './constants';
 import { createApiResponse, extractErrorMessage } from './utils';
 
 export class ApiClient {
@@ -144,7 +141,6 @@ export class ApiClient {
       if (serverResponse.success && serverResponse.data) {
         const loginData = serverResponse.data;
         
-        
         if (loginData.login_success && loginData.session_token) {
           this.authInfo.sessionToken = loginData.session_token;
           sessionStorage.setItem(STORAGE_KEYS.SESSION_TOKEN, loginData.session_token);
@@ -152,18 +148,17 @@ export class ApiClient {
           return createApiResponse(true, { 
             ...loginData, 
             success: true, 
-            message: serverResponse.message || loginData.response || 'Login successful' 
+            message: serverResponse.message || 'Login successful' 
           });
         }
       }
       
       // 서버가 실패 응답을 보낸 경우 (success: false)
       if (!serverResponse.success) {
-        const errorData = serverResponse.data as any;
         return createApiResponse<LoginResponseData & { success: boolean; message: string }>(
           false, 
           undefined, 
-          serverResponse.error || errorData?.response || 'Login failed', 
+          serverResponse.error || 'Login failed', 
           status
         );
       }
