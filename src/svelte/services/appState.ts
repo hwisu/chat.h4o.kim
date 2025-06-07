@@ -6,6 +6,7 @@
 import { appService } from './appService';
 import { modalService } from './modalService';
 import { setError, clearError } from '../stores/ui.svelte';
+import { uiState } from '../stores/ui.svelte';
 
 export class AppStateManager {
   constructor() {
@@ -13,15 +14,53 @@ export class AppStateManager {
   }
 
   /**
-   * 모달 이벤트 핸들러들
+   * 모달 상태 구독 - modalService에 위임
+   */
+  subscribeToModals(callback: (state: any) => void): () => void {
+    return modalService.subscribe(callback);
+  }
+
+  /**
+   * 모달 이벤트 핸들러들 - modalService에 위임
+   */
+  handleModelClick(): void {
+    modalService.handleModelClick();
+  }
+
+  handleRoleClick(): void {
+    modalService.handleRoleClick();
+  }
+
+  hideAuthModal(): void {
+    modalService.hideAuthModal();
+  }
+
+  hideModelModal(): void {
+    modalService.hideModelModal();
+  }
+
+  hideRoleModal(): void {
+    modalService.hideRoleModal();
+  }
+
+  /**
+   * 기존 이벤트 핸들러들
    */
   async handleAuthSuccess(): Promise<void> {
-    modalService.hideAuthModal();
+    console.log('[AppStateManager] Auth success - starting...');
+    modalService.refreshAfterAuth();
     clearError();
+    // Hide the system message after successful authentication
+    uiState.showSystemMessage = false;
+    console.log('[AppStateManager] Auth success - loading data...');
     try {
-      await appService.initialize();
+      // Instead of re-initializing the entire app, just load the necessary data
+      // since authentication state is already updated by the login process
+      await appService.loadAllData();
+      console.log('[AppStateManager] Auth success - data loaded successfully');
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Initialization failed');
+      console.error('[AppStateManager] Auth success - data loading failed:', error);
+      setError(error instanceof Error ? error.message : 'Data loading failed after authentication');
     }
   }
 

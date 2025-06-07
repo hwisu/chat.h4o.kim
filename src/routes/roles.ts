@@ -54,9 +54,8 @@ roles.post('/set-role', authRequired, asyncHandler(async (c) => {
   console.log(`🎭 Role set: ${sessionId} -> ${roleId}`);
 
   return successResponse(c, {
-    role: getPublicRoleInfo(role),
-    message: RESPONSE_MESSAGES.ROLE_SET_SUCCESS(role.name)
-  });
+    role: getPublicRoleInfo(role)
+  }, RESPONSE_MESSAGES.ROLE_SET_SUCCESS(role.name));
 }));
 
 export default roles;

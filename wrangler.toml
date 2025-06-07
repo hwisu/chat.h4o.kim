@@ -13,3 +13,4 @@ binding = "ASSETS"
 binding = "DB" # Worker에서 env.DB로 접근 가능
 database_name = "chat-contexts"
 database_id = "a41896bf-d115-4d65-aa9b-36213d77db77"
+migrations_dir = "migrations"

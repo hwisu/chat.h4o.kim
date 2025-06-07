@@ -136,7 +136,7 @@
     flex-direction: column;
     background: #000000;
     color: #ffffff;
-    font-family: 'MonoplexKRNerd', 'JetBrains Mono', monospace;
+    font-family: 'MonoplexKRNerd', monospace;
     border: none;
     outline: none;
     margin: 0;

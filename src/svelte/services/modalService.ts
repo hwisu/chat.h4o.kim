@@ -37,6 +37,13 @@ export class ModalService {
   }
 
   /**
+   * 현재 인증 상태 확인
+   */
+  private isCurrentlyAuthenticated(): boolean {
+    return authState.isAuthenticated === true;
+  }
+
+  /**
    * Auth 모달 표시
    */
   showAuthModal(): void {
@@ -50,6 +57,26 @@ export class ModalService {
   hideAuthModal(): void {
     this.modalState.showAuthModal = false;
     this.notifySubscribers();
+  }
+
+  /**
+   * 인증 성공 후 상태 새로고침
+   */
+  refreshAfterAuth(): void {
+    console.log('[ModalService] Refreshing after authentication...');
+    // Force close auth modal and ensure state is clean
+    this.modalState.showAuthModal = false;
+    this.notifySubscribers();
+    
+    // Log current auth state for debugging
+    const currentAuthState = authState;
+    console.log('[ModalService] Auth state after refresh:', {
+      isAuthenticated: currentAuthState.isAuthenticated,
+      status: currentAuthState.status,
+      method: currentAuthState.method,
+      hasSessionToken: !!currentAuthState.sessionToken,
+      hasApiKey: !!currentAuthState.userApiKey
+    });
   }
 
   /**
@@ -98,7 +125,7 @@ export class ModalService {
    * 헤더 클릭 이벤트 처리 - 모델 관련
    */
   handleModelClick(): void {
-    if (authState.isAuthenticated) {
+    if (this.isCurrentlyAuthenticated()) {
       this.showModelModal();
     } else {
       this.showAuthModal();
@@ -109,7 +136,7 @@ export class ModalService {
    * 헤더 클릭 이벤트 처리 - 역할 관련
    */
   handleRoleClick(): void {
-    if (authState.isAuthenticated) {
+    if (this.isCurrentlyAuthenticated()) {
       this.showRoleModal();
     } else {
       this.showAuthModal();

@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import type { Env, ChatRequest, ChatResponse } from '../types';
+import type { Env, ChatRequest, ChatResponseData } from '../types';
 import { getRoleSystemPrompt } from '../roles';
 import { 
   processChatMessage, 

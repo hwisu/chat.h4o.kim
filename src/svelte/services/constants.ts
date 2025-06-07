@@ -19,8 +19,8 @@ export const API_ENDPOINTS = {
 
 export const DEFAULT_VALUES = {
   CONTEXT_SIZE: 128000,
-  ROLE_NAME: '🤖 General Assistant',
-  ROLE_DESCRIPTION: 'General purpose AI assistant',
+  ROLE_NAME: 'whoami',
+  ROLE_DESCRIPTION: 'Please authenticate to select a role',
   MODEL_NAME: 'whoami'
 } as const;
 

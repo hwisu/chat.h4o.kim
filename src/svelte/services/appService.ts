@@ -18,7 +18,9 @@ import {
   calculateContextPercentage, 
   createDefaultModelInfo, 
   createDefaultRoleInfo,
-  getWelcomeMessage
+  getWelcomeMessage,
+  ensureArray,
+  isNonEmptyArray
 } from './utils';
 
 export class AppService {
@@ -27,26 +29,32 @@ export class AppService {
    */
   async initialize(): Promise<void> {
     try {
+      console.log('[AppService] Initialization starting...');
       setLoading(true);
       clearError();
       
       // 1. 로컬 저장된 인증 정보 복원
+      console.log('[AppService] Restoring auth from storage...');
       apiClient.restoreAuth();
       
-      // 2. 서버 인증 상태 확인
-      await this.checkAuthenticationStatus();
+      // 2. 서버 인증 상태 확인 (한 번만)
+      console.log('[AppService] Checking authentication status...');
+      const isAuthenticated = await this.checkAuthenticationStatus();
       
       // 3. 인증된 경우 필요한 데이터 로드
-      const authStatus = await apiClient.checkAuthStatus();
-      if (authStatus.success && authStatus.data?.authenticated) {
+      if (isAuthenticated) {
+        console.log('[AppService] Authenticated - loading data...');
         await this.loadAllData();
+      } else {
+        console.log('[AppService] Not authenticated - skipping data load');
       }
       
       // 4. 시스템 메시지 표시
       this.showWelcomeMessage();
       
+      console.log('[AppService] Initialization completed');
     } catch (error) {
-      console.error('App initialization failed:', error);
+      console.error('[AppService] App initialization failed:', error);
       setError(`Failed to initialize app: ${extractErrorMessage(error)}`);
     } finally {
       setLoading(false);
@@ -56,7 +64,7 @@ export class AppService {
   /**
    * 모든 필요한 데이터 로드
    */
-  private async loadAllData(): Promise<void> {
+  async loadAllData(): Promise<void> {
     await Promise.all([
       this.loadModels(),
       this.loadRoles(),
@@ -69,10 +77,13 @@ export class AppService {
    */
   async checkAuthenticationStatus(): Promise<boolean> {
     try {
+      console.log('[AppService] Checking auth status with server...');
       const result = await apiClient.checkAuthStatus();
       
       if (result.success && result.data) {
         const { authenticated, method, contextUsage } = result.data;
+        
+        console.log('[AppService] Auth status response:', { authenticated, method, contextUsage });
         
         updateAuth({
           isAuthenticated: authenticated,
@@ -84,13 +95,15 @@ export class AppService {
           updateContext({ usage: contextUsage });
         }
         
+        console.log('[AppService] Auth state updated:', { isAuthenticated: authenticated });
         return authenticated;
       } else {
+        console.log('[AppService] Auth status check failed:', result.error);
         this.setUnauthenticatedState();
         return false;
       }
     } catch (error) {
-      console.error('Auth status check failed:', error);
+      console.error('[AppService] Auth status check failed:', error);
       this.setUnauthenticatedState('Connection error');
       return false;
     }
@@ -116,20 +129,28 @@ export class AppService {
       
       const result = await apiClient.getModels();
       
-      if (result.success && result.data) {
+      if (result.success && result.data && result.data.models) {
+        // 배열이 유효한지 확인
+        const models = ensureArray<ModelInfo>(result.data.models);
         updateModels({
-          available: result.data.models,
+          available: models,
           isLoading: false
         });
         
-        this.updateSelectedModel(result.data.models);
+        this.updateSelectedModel(models);
       } else {
-        console.error('Failed to load models:', result.error);
-        updateModels({ isLoading: false });
+        console.error('Failed to load models:', result?.error || 'Unknown error');
+        updateModels({ 
+          available: [],
+          isLoading: false 
+        });
       }
     } catch (error) {
       console.error('Error loading models:', error);
-      updateModels({ isLoading: false });
+      updateModels({ 
+        available: [],
+        isLoading: false 
+      });
     }
   }
 
@@ -137,6 +158,11 @@ export class AppService {
    * 선택된 모델 정보 업데이트
    */
   private updateSelectedModel(models: ModelInfo[]): void {
+    if (!isNonEmptyArray(models)) {
+      console.warn('No models available for selection');
+      return;
+    }
+    
     const selectedModel = models.find(m => m.selected) || models[0];
     if (selectedModel) {
       updateModels({
@@ -159,20 +185,28 @@ export class AppService {
       
       const result = await apiClient.getRoles();
       
-      if (result.success && result.data) {
+      if (result.success && result.data && result.data.roles) {
+        // 배열이 유효한지 확인
+        const roles = ensureArray<RoleInfo>(result.data.roles);
         updateRoles({
-          available: result.data.roles,
+          available: roles,
           isLoading: false
         });
         
-        this.updateSelectedRole(result.data.roles);
+        this.updateSelectedRole(roles);
       } else {
-        console.error('Failed to load roles:', result.error);
-        updateRoles({ isLoading: false });
+        console.error('Failed to load roles:', result?.error || 'Unknown error');
+        updateRoles({ 
+          available: [],
+          isLoading: false 
+        });
       }
     } catch (error) {
       console.error('Error loading roles:', error);
-      updateRoles({ isLoading: false });
+      updateRoles({ 
+        available: [],
+        isLoading: false 
+      });
     }
   }
 
@@ -180,6 +214,11 @@ export class AppService {
    * 선택된 역할 정보 업데이트
    */
   private updateSelectedRole(roles: RoleInfo[]): void {
+    if (!isNonEmptyArray(roles)) {
+      console.warn('No roles available for selection');
+      return;
+    }
+    
     const selectedRole = roles.find(r => r.selected) || roles[0];
     if (selectedRole) {
       updateRoles({
@@ -226,11 +265,13 @@ export class AppService {
    */
   async login(password: string): Promise<ServiceApiResponse<any>> {
     try {
+      console.log('[AppService] Login attempt starting...');
       setLoading(true);
       
       const result = await apiClient.login(password);
       
       if (result.success) {
+        console.log('[AppService] Login successful, updating auth state...');
         updateAuth({
           isAuthenticated: true,
           status: 'Authenticated via server',
@@ -238,17 +279,20 @@ export class AppService {
           sessionToken: result.data?.session_token
         });
         
+        console.log('[AppService] Auth state updated, loading data...');
         // 로그인 성공 후 데이터 로드
         await this.loadAllData();
         
+        console.log('[AppService] Login completed successfully');
         return { success: true };
       } else {
+        console.log('[AppService] Login failed:', result.error);
         setError(result.error || 'Login failed');
         return { success: false, error: result.error };
       }
     } catch (error) {
       const errorMessage = extractErrorMessage(error);
-      console.error('Login error:', error);
+      console.error('[AppService] Login error:', error);
       setError(`Login failed: ${errorMessage}`);
       return { success: false, error: errorMessage };
     } finally {
@@ -335,6 +379,7 @@ export const appService = new AppService();
 // 기존 호환성을 위한 함수 exports
 export const initializeApp = () => appService.initialize();
 export const checkAuthenticationStatus = () => appService.checkAuthenticationStatus();
+export const loadAllData = () => appService.loadAllData();
 export const loadModels = () => appService.loadModels();
 export const loadRoles = () => appService.loadRoles();
 export const loadContextInfo = () => appService.loadContextInfo();
