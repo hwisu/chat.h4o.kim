@@ -30,9 +30,11 @@ export class ChatService {
       // UI 로딩 상태 설정
       setLoading(true);
 
-      // 로그인 명령어 처리
+      // 명령어 처리
       if (content.startsWith(COMMANDS.LOGIN_PREFIX)) {
         await this.handleLoginCommand(content);
+      } else if (content.trim() === '/help') {
+        await this.handleHelpCommand();
       } else {
         // 일반 채팅 메시지 처리
         await this.handleChatMessage(content);
@@ -122,6 +124,22 @@ export class ChatService {
     } else {
       this.addSystemMessage(
         result.error || 'Login failed',
+        'error'
+      );
+    }
+  }
+
+  /**
+   * 도움말 명령어 처리
+   */
+  private async handleHelpCommand(): Promise<void> {
+    const result = await apiClient.getHelp();
+    
+    if (result.success && result.data?.message) {
+      this.addSystemMessage(result.data.message, 'success');
+    } else {
+      this.addSystemMessage(
+        'Failed to load help information',
         'error'
       );
     }

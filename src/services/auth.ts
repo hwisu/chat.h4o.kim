@@ -148,7 +148,7 @@ export async function authenticateUser(
       return {
         success: true,
         token: encryptedToken,
-        message: `✅ Server login successful!\n\n📡 Using server API key\n\n💬 Main Commands:\n• /models - List available AI models\n• /set-model <id> - Set specific model\n• /set-model auto - Use auto-selection\n• /roles - List available AI roles\n• /set-role <role-id> - Set AI personality\n• /clear - Clear conversation history\n• /help - Show all commands\n\n🔄 Session expires when tab closes`
+        message: `✅ Server login successful!\n\n📡 Using server API key\n\n💬 Available Commands:\n• /help - Show all commands\n\n🔄 Session expires when tab closes`
       };
     } catch (error) {
       console.error('Token creation failed:', error);

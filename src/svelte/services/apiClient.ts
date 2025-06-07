@@ -303,6 +303,14 @@ export class ApiClient {
   }
 
   /**
+   * 도움말 메시지 가져오기
+   */
+  async getHelp(): Promise<ServiceApiResponse<{ message: string }>> {
+    const { response, ok, status } = await this.makeRequest(API_ENDPOINTS.HELP);
+    return this.handleResponse(response, ok, status);
+  }
+
+  /**
    * 로컬 스토리지에서 인증 정보 복원
    */
   restoreAuth(): void {
