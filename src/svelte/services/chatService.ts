@@ -60,7 +60,7 @@ export class ChatService {
       role: 'system',
       content: content,
       timestamp: new Date(),
-      // 타입은 추가 메타데이터로 처리
+      type: type
     };
     addMessage(message);
   }
@@ -69,13 +69,23 @@ export class ChatService {
    * AI 응답 메시지 추가
    */
   private addAssistantMessage(content: string, model?: string, tokenUsage?: any): void {
+    console.log('[ChatService] addAssistantMessage called with:', {
+      contentLength: content.length,
+      model: model,
+      tokenUsage: tokenUsage
+    });
+
     const message: ChatMessage = {
       id: generateMessageId(),
       role: 'assistant',
       content: content,
       timestamp: new Date(),
-      tokens: tokenUsage?.total_tokens
+      tokens: tokenUsage?.total_tokens,
+      model: model,
+      tokenUsage: tokenUsage
     };
+
+    console.log('[ChatService] Final message object:', message);
     addMessage(message);
   }
 
@@ -108,16 +118,28 @@ export class ChatService {
   private async handleChatMessage(content: string): Promise<void> {
     const result = await apiClient.sendMessage(content);
 
+    console.log('[ChatService] API result:', result);
+
     if (result.success && result.data) {
+      console.log('[ChatService] Response data:', result.data);
+      console.log('[ChatService] Usage field:', result.data.usage);
+      console.log('[ChatService] Model field:', result.data.model);
+
       if (result.data.response) {
-        // console.log('Token usage from API:', result.data.usage); // 채팅마다 출력되는 로그 제거
         this.addAssistantMessage(
           result.data.response,
-          result.data.model,
+          result.data.model || result.data.currentModel,
           result.data.usage
+        );
+      } else {
+        console.warn('No response content in API response:', result.data);
+        this.addSystemMessage(
+          'Received empty response from AI',
+          'error'
         );
       }
     } else {
+      console.error('[ChatService] API call failed:', result.error);
       this.addSystemMessage(
         result.error || 'Failed to send message',
         'error'

@@ -234,7 +234,7 @@
     background: rgba(0, 0, 0, 0.4);
     padding: 2px 6px;
     border-radius: 4px;
-    font-family: 'MonoplexKRNerd', 'JetBrains Mono', 'Courier New', monospace;
+    font-family: 'MonoplexKRNerd', monospace;
     font-size: 15px;
     color: #7FB4CA !important; /* springBlue */
     border: 1px solid rgba(0, 255, 0, 0.2);
@@ -256,7 +256,7 @@
   .code-highlighter :global(pre code) {
     background: none !important;
     padding: 0 !important;
-    font-family: 'MonoplexKRNerd', 'JetBrains Mono', 'Courier New', monospace;
+    font-family: 'MonoplexKRNerd', monospace;
     font-size: 15px;
     line-height: 1.5;
     color: #DCD7BA;
@@ -486,7 +486,7 @@
     font-size: 14px;
     cursor: pointer;
     transition: all 0.2s;
-    font-family: 'MonoplexKRNerd', 'JetBrains Mono', 'Courier New', monospace;
+    font-family: 'MonoplexKRNerd', monospace;
     z-index: 10;
   }
 

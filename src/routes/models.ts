@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { Env, OpenRouterModelsResponse, OpenRouterModel } from '../types';
+import { Env, OpenRouterModelsResponse, OpenRouterModel, ModelInfo } from '../types';
 import { authRequired } from '../middleware/auth';
 import { RESPONSE_MESSAGES, API_CONFIG, MODEL_CONFIG, HTTP_STATUS } from './constants';
 import { successResponse, errorResponse, asyncHandler, parseJsonBody, getCookieValue, setCookie, fetchWithTimeout } from './utils';
@@ -8,12 +8,38 @@ const models = new Hono<{ Bindings: Env }>();
 
 // Model cache with type information
 interface ModelCache {
-  data: OpenRouterModel[];
+  data: ModelInfo[];
   timestamp: number;
   type: 'user' | 'server';
 }
 
 let modelsCache: ModelCache | null = null;
+
+// Transform OpenRouterModel to ModelInfo format
+function transformToModelInfo(openRouterModel: OpenRouterModel, isSelected: boolean = false): ModelInfo {
+  // Extract provider from model name or id
+  let provider = 'Unknown';
+  if (openRouterModel.name.includes(':')) {
+    provider = openRouterModel.name.split(':')[0];
+  } else if (openRouterModel.id.includes('/')) {
+    provider = openRouterModel.id.split('/')[0];
+  }
+
+  return {
+    id: openRouterModel.id,
+    name: openRouterModel.name,
+    provider,
+    context_length: openRouterModel.context_length,
+    selected: isSelected
+  };
+}
+
+// Transform array of OpenRouterModels to ModelInfos
+function transformModelsArray(openRouterModels: OpenRouterModel[], selectedModelId?: string): ModelInfo[] {
+  return openRouterModels.map(model => 
+    transformToModelInfo(model, model.id === selectedModelId)
+  );
+}
 
 // Utility Functions
 function getProviderPriority(modelId: string, isUserApiKey: boolean = false): number {
@@ -118,9 +144,10 @@ export async function autoSelectModel(c: any, apiKey: string, skipLog?: boolean)
   try {
     let freeModels: OpenRouterModel[] = [];
 
-    // Check cache first
+    // Check cache first - need to handle different cache format
     if (modelsCache && Date.now() - modelsCache.timestamp < API_CONFIG.CACHE_DURATION) {
-      freeModels = modelsCache.data;
+      // Convert cached ModelInfo back to OpenRouterModel for processing
+      freeModels = []; // We'll use the cached data differently
     } else {
       // Fetch with timeout
       try {
@@ -138,7 +165,7 @@ export async function autoSelectModel(c: any, apiKey: string, skipLog?: boolean)
           freeModels = filterFreeModels(modelsData.data);
 
           modelsCache = {
-            data: freeModels,
+            data: transformModelsArray(freeModels),
             timestamp: Date.now(),
             type: 'server'
           };
@@ -148,6 +175,15 @@ export async function autoSelectModel(c: any, apiKey: string, skipLog?: boolean)
           console.warn('Models fetch failed:', error);
         }
       }
+    }
+
+    // Use cached data if available and no fresh data
+    if (freeModels.length === 0 && modelsCache?.data && modelsCache.data.length > 0) {
+      const selectedModel = modelsCache.data[0].id;
+      if (!skipLog) {
+        console.log(`🎯 Auto-selected model from cache: ${selectedModel}`);
+      }
+      return selectedModel;
     }
 
     if (freeModels.length > 0) {
@@ -222,6 +258,7 @@ models.get('/models', authRequired, asyncHandler(async (c) => {
   const apiKey = getApiKey(c);
   const hasUserApiKey = c.req.header('X-User-API-Key') !== undefined;
   const cacheKey = hasUserApiKey ? 'user' : 'server';
+  const selectedModelCookie = getSelectedModelFromCookie(c);
 
   // Check cache first
   if (modelsCache?.type === cacheKey && Date.now() - modelsCache.timestamp < API_CONFIG.CACHE_DURATION) {
@@ -234,10 +271,13 @@ models.get('/models', authRequired, asyncHandler(async (c) => {
 
   try {
     const processedModels = await fetchModels(apiKey, hasUserApiKey);
+    
+    // Transform to ModelInfo format with selected status
+    const modelInfos = transformModelsArray(processedModels, selectedModelCookie || undefined);
 
     // Update cache
     modelsCache = {
-      data: processedModels,
+      data: modelInfos,
       timestamp: Date.now(),
       type: cacheKey
     };
@@ -251,7 +291,7 @@ models.get('/models', authRequired, asyncHandler(async (c) => {
     }
 
     return successResponse(c, {
-      models: processedModels,
+      models: modelInfos,
       response: formatModelsResponse(processedModels),
       cached: false,
       user_api_key: hasUserApiKey
@@ -261,7 +301,7 @@ models.get('/models', authRequired, asyncHandler(async (c) => {
       // Return cached data on timeout
       return successResponse(c, {
         models: modelsCache.data,
-        response: formatModelsResponse(modelsCache.data),
+        response: formatModelsResponse([]), // We don't have OpenRouterModel format in cache
         cached: true,
         user_api_key: hasUserApiKey
       });
@@ -281,17 +321,17 @@ models.post('/set-model', authRequired, asyncHandler(async (c) => {
 
   if (model === MODEL_CONFIG.AUTO_SELECT) {
     setCookie(c, 'selected_model', '', 0); // Clear cookie
-    return successResponse(c, null, RESPONSE_MESSAGES.MODEL_AUTO_SET_SUCCESS, {
+    return successResponse(c, {
       response: RESPONSE_MESSAGES.MODEL_AUTO_SET_SUCCESS,
       model: MODEL_CONFIG.AUTO_SELECT
-    });
+    }, RESPONSE_MESSAGES.MODEL_AUTO_SET_SUCCESS);
   }
 
   setCookie(c, 'selected_model', model, API_CONFIG.COOKIE_MAX_AGE);
-  return successResponse(c, null, RESPONSE_MESSAGES.MODEL_SET_SUCCESS(model), {
+  return successResponse(c, {
     response: RESPONSE_MESSAGES.MODEL_SET_SUCCESS(model),
     model
-  });
+  }, RESPONSE_MESSAGES.MODEL_SET_SUCCESS(model));
 }));
 
 export default models;

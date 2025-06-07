@@ -6,6 +6,15 @@ export interface ChatMessage {
   content: string;
   timestamp: Date;
   tokens?: number;
+  model?: string;
+  tokenUsage?: { 
+    input?: number; 
+    output?: number; 
+    prompt_tokens?: number; 
+    completion_tokens?: number; 
+    total_tokens?: number; 
+  };
+  type?: string;
 }
 
 // Svelte 5 runes 사용

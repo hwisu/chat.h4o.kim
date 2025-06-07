@@ -2,10 +2,10 @@ import { Hono } from 'hono';
 import type { 
   Env, 
   LoginRequest, 
-  LoginResponse, 
-  AuthStatusResponse, 
+  LoginResponseData, 
+  AuthStatusData, 
   SetApiKeyRequest, 
-  SetApiKeyResponse 
+  SetApiKeyResponseData 
 } from '../types';
 import { 
   authenticateUser, 
@@ -36,11 +36,11 @@ auth.post('/login', asyncHandler(async (c) => {
   const result = await authenticateUser(password, accessPassword || '', jwtSecret);
 
   if (result.success) {
-    return successResponse(c, null, result.message, {
+    return successResponse(c, {
       login_success: true,
       session_token: result.token,
       response: result.message
-    });
+    }, result.message);
   } else {
     return errorResponse(c, result.message, HTTP_STATUS.UNAUTHORIZED, {
       login_failed: true,
@@ -73,10 +73,10 @@ auth.post('/set-api-key', asyncHandler(async (c) => {
     return errorResponse(c, 'Invalid API key length', HTTP_STATUS.BAD_REQUEST);
   }
 
-  return successResponse(c, null, RESPONSE_MESSAGES.API_KEY_SET_SUCCESS, {
+  return successResponse(c, {
     message: RESPONSE_MESSAGES.API_KEY_SET_SUCCESS,
     response: RESPONSE_MESSAGES.API_KEY_VALIDATED
-  });
+  }, RESPONSE_MESSAGES.API_KEY_SET_SUCCESS);
 }));
 
 // Verify authentication (alias)

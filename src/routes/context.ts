@@ -28,7 +28,7 @@ context.post('/context/clear', authRequired, asyncHandler(async (c) => {
   const userId = getUserIdFromContext(c);
   await contextManager.clearContext(userId);
   
-  return successResponse(c, null, RESPONSE_MESSAGES.CONTEXT_CLEARED);
+  return successResponse(c, {}, RESPONSE_MESSAGES.CONTEXT_CLEARED);
 }));
 
 // Get context statistics

@@ -7,13 +7,14 @@ import type {
   AuthInfo, 
   ModelInfo, 
   RoleInfo, 
-  ChatResponse, 
-  LoginResponse, 
-  AuthStatusResponse,
-  ModelsResponse,
-  RolesResponse,
-  SetApiKeyResponse,
-  ContextResponse
+  ChatResponseData, 
+  LoginResponseData, 
+  AuthStatusData,
+  ModelsResponseData,
+  RolesResponseData,
+  SetApiKeyResponseData,
+  ContextData,
+  ApiResponse
 } from './types';
 import { STORAGE_KEYS, API_ENDPOINTS } from './constants';
 import { createApiResponse, extractErrorMessage } from './utils';
@@ -88,15 +89,31 @@ export class ApiClient {
   ): Promise<ServiceApiResponse<T>> {
     if (ok) {
       try {
-        const data = await response.json() as T;
-        return createApiResponse<T>(true, data);
+        const serverResponse = await response.json() as ApiResponse<T>;
+        
+        // 서버가 표준 ApiResponse 구조로 응답하는 경우
+        if (serverResponse.success !== undefined) {
+          if (serverResponse.success && serverResponse.data) {
+            return createApiResponse<T>(true, serverResponse.data, serverResponse.message);
+          } else {
+            return createApiResponse<T>(false, undefined, serverResponse.error || 'Request failed', status);
+          }
+        } else {
+          // 레거시 응답인 경우 래핑
+          return createApiResponse<T>(true, serverResponse as T);
+        }
       } catch (error) {
         return createApiResponse<T>(false, undefined, 'Invalid JSON response', status);
       }
     } else {
       try {
-        const errorData = await response.json() as any;
-        return createApiResponse<T>(false, undefined, errorData.response || errorData.error || `HTTP ${status}`, status);
+        const errorData = await response.json() as ApiResponse<any>;
+        return createApiResponse<T>(
+          false, 
+          undefined, 
+          errorData.error || errorData.data?.response || `HTTP ${status}`, 
+          status
+        );
       } catch {
         return createApiResponse<T>(false, undefined, `HTTP ${status}`, status);
       }
@@ -106,37 +123,69 @@ export class ApiClient {
   /**
    * 인증 상태 확인
    */
-  async checkAuthStatus(): Promise<ServiceApiResponse<AuthStatusResponse>> {
+  async checkAuthStatus(): Promise<ServiceApiResponse<AuthStatusData>> {
     const { response, ok, status } = await this.makeRequest(API_ENDPOINTS.AUTH_STATUS);
-    return this.handleResponse<AuthStatusResponse>(response, ok, status);
+    return this.handleResponse<AuthStatusData>(response, ok, status);
   }
 
   /**
    * 서버 로그인
    */
-  async login(password: string): Promise<ServiceApiResponse<LoginResponse & { success: boolean; message: string }>> {
+  async login(password: string): Promise<ServiceApiResponse<LoginResponseData & { success: boolean; message: string }>> {
     const { response, ok, status } = await this.makeRequest(API_ENDPOINTS.LOGIN, {
       method: 'POST',
       body: { password }
     });
 
     if (ok) {
-      const data = await response.json() as LoginResponse;
-      if (data.login_success && data.session_token) {
-        this.authInfo.sessionToken = data.session_token;
-        sessionStorage.setItem(STORAGE_KEYS.SESSION_TOKEN, data.session_token);
+      const serverResponse = await response.json() as ApiResponse<LoginResponseData>;
+      
+      // 서버가 성공 응답을 보낸 경우
+      if (serverResponse.success && serverResponse.data) {
+        const loginData = serverResponse.data;
+        console.log('[DEBUG] Login data:', JSON.stringify(loginData, null, 2));
+        console.log('[DEBUG] login_success type:', typeof loginData.login_success, 'value:', loginData.login_success);
+        console.log('[DEBUG] session_token type:', typeof loginData.session_token, 'exists:', !!loginData.session_token);
         
-        return createApiResponse(true, { 
-          ...data, 
-          success: true, 
-          message: data.response || 'Login successful' 
-        });
-      } else if (data.login_failed) {
-        return createApiResponse<LoginResponse & { success: boolean; message: string }>(false, undefined, data.response || 'Login failed', status);
+        if (loginData.login_success && loginData.session_token) {
+          this.authInfo.sessionToken = loginData.session_token;
+          sessionStorage.setItem(STORAGE_KEYS.SESSION_TOKEN, loginData.session_token);
+          
+          return createApiResponse(true, { 
+            ...loginData, 
+            success: true, 
+            message: serverResponse.message || loginData.response || 'Login successful' 
+          });
+        } else {
+          console.log('[DEBUG] Login condition failed:', {
+            hasLoginSuccess: !!loginData.login_success,
+            hasSessionToken: !!loginData.session_token,
+            loginSuccessValue: loginData.login_success,
+            sessionTokenValue: loginData.session_token
+          });
+        }
       }
-      return createApiResponse<LoginResponse & { success: boolean; message: string }>(false, undefined, 'Unknown login response', status);
+      
+      // 서버가 실패 응답을 보낸 경우 (success: false)
+      if (!serverResponse.success) {
+        const errorData = serverResponse.data as any;
+        return createApiResponse<LoginResponseData & { success: boolean; message: string }>(
+          false, 
+          undefined, 
+          serverResponse.error || errorData?.response || 'Login failed', 
+          status
+        );
+      }
+      
+      // 예상하지 못한 응답 구조
+      return createApiResponse<LoginResponseData & { success: boolean; message: string }>(
+        false, 
+        undefined, 
+        'Unknown login response format', 
+        status
+      );
     } else {
-      return this.handleResponse<LoginResponse & { success: boolean; message: string }>(response, ok, status);
+      return this.handleResponse<LoginResponseData & { success: boolean; message: string }>(response, ok, status);
     }
   }
 
@@ -150,12 +199,16 @@ export class ApiClient {
     });
 
     if (ok) {
-      const data = await response.json() as { success: boolean };
-      if (data.success) {
+      const serverResponse = await response.json() as ApiResponse<SetApiKeyResponseData>;
+      
+      if (serverResponse.success) {
         this.authInfo.userApiKey = apiKey;
         localStorage.setItem(STORAGE_KEYS.USER_API_KEY, apiKey);
+        
+        return createApiResponse<{ success: boolean }>(true, { success: true });
+      } else {
+        return createApiResponse<{ success: boolean }>(false, undefined, serverResponse.error || 'API key setting failed', status);
       }
-      return createApiResponse<{ success: boolean }>(true, data);
     } else {
       return this.handleResponse<{ success: boolean }>(response, ok, status);
     }
@@ -214,17 +267,31 @@ export class ApiClient {
   /**
    * 채팅 메시지 전송
    */
-  async sendMessage(messageContent: string): Promise<ServiceApiResponse<ChatResponse>> {
+  async sendMessage(messageContent: string): Promise<ServiceApiResponse<ChatResponseData>> {
     const { response, ok, status } = await this.makeRequest(API_ENDPOINTS.CHAT, {
       method: 'POST',
       body: { message: messageContent }
     });
 
     if (status === 401) {
-      return createApiResponse<ChatResponse>(false, undefined, 'Authentication required', 401);
+      return createApiResponse<ChatResponseData>(false, undefined, 'Authentication required', 401);
     }
 
-    return this.handleResponse<ChatResponse>(response, ok, status);
+    if (ok) {
+      try {
+        const serverResponse = await response.json() as ApiResponse<ChatResponseData>;
+        // Extract the actual chat data from the server response
+        if (serverResponse.success && serverResponse.data) {
+          return createApiResponse<ChatResponseData>(true, serverResponse.data);
+        } else {
+          return createApiResponse<ChatResponseData>(false, undefined, serverResponse.error || 'Chat request failed', status);
+        }
+      } catch (error) {
+        return createApiResponse<ChatResponseData>(false, undefined, 'Invalid JSON response', status);
+      }
+    } else {
+      return this.handleResponse<ChatResponseData>(response, ok, status);
+    }
   }
 
   /**
@@ -239,8 +306,18 @@ export class ApiClient {
    * 로컬 스토리지에서 인증 정보 복원
    */
   restoreAuth(): void {
-    this.authInfo.sessionToken = sessionStorage.getItem(STORAGE_KEYS.SESSION_TOKEN);
-    this.authInfo.userApiKey = localStorage.getItem(STORAGE_KEYS.USER_API_KEY);
+    const sessionToken = sessionStorage.getItem(STORAGE_KEYS.SESSION_TOKEN);
+    const userApiKey = localStorage.getItem(STORAGE_KEYS.USER_API_KEY);
+    
+    console.log('[ApiClient] Restoring auth:', {
+      hasSessionToken: !!sessionToken,
+      hasUserApiKey: !!userApiKey,
+      sessionTokenLength: sessionToken?.length || 0,
+      userApiKeyLength: userApiKey?.length || 0
+    });
+    
+    this.authInfo.sessionToken = sessionToken;
+    this.authInfo.userApiKey = userApiKey;
   }
 
   /**

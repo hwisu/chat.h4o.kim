@@ -1,4 +1,4 @@
-const CACHE_NAME = 'chatty-v1.0.18';
+const CACHE_NAME = 'chatty-v1.0.19';
 const urlsToCache = [
   '/',
   '/svelte/bundle.js',
@@ -6,9 +6,6 @@ const urlsToCache = [
   '/svelte/components.css',
   '/svelte/modals.css',
   '/svelte/highlight.css',
-  'https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap',
-  'https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_Monoplex-nerd@1.0/MonoplexKRNerd-Regular.woff2',
-  'https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_Monoplex-nerd@1.0/MonoplexKRNerd-Medium.woff2',
   'https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_Monoplex-nerd@1.0/MonoplexKRNerd-Bold.woff2'
 ];
 
@@ -48,6 +45,14 @@ self.addEventListener('activate', (event) => {
 
 // Fetch 이벤트 - 네트워크 우선, 캐시 폴백 전략
 self.addEventListener('fetch', (event) => {
+  // 브라우저 확장 프로그램 요청은 무시
+  if (event.request.url.startsWith('chrome-extension://') ||
+      event.request.url.startsWith('moz-extension://') ||
+      event.request.url.startsWith('safari-extension://') ||
+      event.request.url.startsWith('ms-browser-extension://')) {
+    return;
+  }
+
   // 채팅 API 요청은 캐시하지 않음
   if (event.request.url.includes('/api/') || 
       event.request.url.includes('openrouter.ai') ||
@@ -63,7 +68,15 @@ self.addEventListener('fetch', (event) => {
           const responseClone = response.clone();
           caches.open(CACHE_NAME)
             .then((cache) => {
-              cache.put(event.request, responseClone);
+              // 캐시 저장 시에도 브라우저 확장 요청 체크
+              if (!event.request.url.startsWith('chrome-extension://') &&
+                  !event.request.url.startsWith('moz-extension://') &&
+                  !event.request.url.startsWith('safari-extension://') &&
+                  !event.request.url.startsWith('ms-browser-extension://')) {
+                cache.put(event.request, responseClone).catch((error) => {
+                  console.log('Cache put failed:', error);
+                });
+              }
             });
         }
         return response;

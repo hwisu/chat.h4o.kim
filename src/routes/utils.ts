@@ -1,32 +1,30 @@
 import { Context } from 'hono';
 import { HTTP_STATUS } from './constants';
 
-// Standard API Response Types
+// Standard API Response Types - 이제 types.ts와 통일됨
 export interface ApiResponse<T = any> {
   success: boolean;
   data?: T;
   message?: string;
   error?: string;
-  [key: string]: any; // Allow additional properties for backward compatibility
 }
 
 // Success Response Helper
-export function successResponse<T>(c: Context, data?: T, message?: string, additionalProps?: Record<string, any>) {
+export function successResponse<T>(c: Context, data?: T, message?: string) {
   const response: ApiResponse<T> = {
     success: true,
     ...(data !== undefined && { data }),
-    ...(message && { message }),
-    ...additionalProps
+    ...(message && { message })
   };
   return c.json(response);
 }
 
 // Error Response Helper
-export function errorResponse(c: Context, message: string, statusCode: number = HTTP_STATUS.INTERNAL_ERROR, additionalProps?: Record<string, any>) {
+export function errorResponse(c: Context, message: string, statusCode: number = HTTP_STATUS.INTERNAL_ERROR, data?: any) {
   const response: ApiResponse = {
     success: false,
     error: message,
-    ...additionalProps
+    ...(data && { data })
   };
   return c.json(response, statusCode as any);
 }

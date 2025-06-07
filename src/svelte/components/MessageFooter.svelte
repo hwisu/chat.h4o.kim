@@ -14,6 +14,18 @@
 
   let { tokenUsage, content }: Props = $props();
 
+  console.log('[MessageFooter] Received tokenUsage:', tokenUsage);
+  console.log('[MessageFooter] TokenUsage type:', typeof tokenUsage);
+  console.log('[MessageFooter] TokenUsage keys:', tokenUsage ? Object.keys(tokenUsage) : 'null/undefined');
+
+  function formatTokens(tokens: number): string {
+    if (tokens < 1000) {
+      return tokens.toString();
+    } else {
+      return (tokens / 1000).toFixed(1) + 'K';
+    }
+  }
+
   function copyToClipboard() {
     navigator.clipboard.writeText(content).then(() => {
       // 복사 성공 피드백은 별도 구현 가능
@@ -24,11 +36,11 @@
 <div class="message-footer">
   <div class="token-usage">
     {#if tokenUsage.prompt_tokens && tokenUsage.completion_tokens}
-      ↑ {Math.round(tokenUsage.prompt_tokens / 1000)}K ↓ {Math.round(tokenUsage.completion_tokens / 1000)}K (total: {Math.round((tokenUsage.total_tokens || (tokenUsage.prompt_tokens + tokenUsage.completion_tokens)) / 1000)}K)
+      ↑ {formatTokens(tokenUsage.prompt_tokens)} ↓ {formatTokens(tokenUsage.completion_tokens)} (total: {formatTokens(tokenUsage.total_tokens || (tokenUsage.prompt_tokens + tokenUsage.completion_tokens))})
     {:else if tokenUsage.total_tokens}
-      total: {Math.round(tokenUsage.total_tokens / 1000)}K
+      total: {formatTokens(tokenUsage.total_tokens)}
     {:else if tokenUsage.input && tokenUsage.output}
-      ↑ {Math.round(tokenUsage.input / 1000)}K ↓ {Math.round(tokenUsage.output / 1000)}K
+      ↑ {formatTokens(tokenUsage.input)} ↓ {formatTokens(tokenUsage.output)}
     {/if}
   </div>
   <button class="copy-button" onclick={copyToClipboard}>
@@ -47,7 +59,7 @@
 
   .token-usage {
     color: #98BB6C; /* springGreen - 토큰 사용량 */
-    font-family: 'MonoplexKRNerd', 'JetBrains Mono', monospace;
+    font-family: 'MonoplexKRNerd', monospace;
   }
 
   .copy-button {
@@ -58,7 +70,7 @@
     border-radius: 4px;
     font-size: 13px;
     cursor: pointer;
-    font-family: 'MonoplexKRNerd', 'JetBrains Mono', monospace;
+    font-family: 'MonoplexKRNerd', monospace;
     transition: all 0.2s;
   }
 

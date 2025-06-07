@@ -22,6 +22,9 @@ import { uiState } from '../stores/ui.svelte';
 
     // ChatService에 메시지 전송 위임
     await chatService.sendMessage(content);
+    
+    // 메시지 전송 후 포커스 복원
+    focusInput();
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -49,6 +52,23 @@ import { uiState } from '../stores/ui.svelte';
       adjustTextareaHeight();
     }
   });
+
+  // 컴포넌트 마운트 시 포커스 설정
+  $effect(() => {
+    if (textareaRef) {
+      // 약간의 지연을 두어 다른 초기화가 완료된 후 포커스
+      setTimeout(() => {
+        textareaRef?.focus();
+      }, 100);
+    }
+  });
+
+  // 메시지 전송 후 포커스 복원
+  function focusInput() {
+    setTimeout(() => {
+      textareaRef?.focus();
+    }, 50);
+  }
 </script>
 
 <div class="chat-input-container">

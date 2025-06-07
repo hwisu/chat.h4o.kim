@@ -50,6 +50,11 @@ import { contextState } from '../stores/context.svelte';
   });
 
   function getContextUsageText(): string {
+    // 인증되지 않은 경우 whoami 표시
+    if (!authState.isAuthenticated) {
+      return 'whoami';
+    }
+    
     const contextSize = Math.round(modelsState.selectedInfo.contextSize / 1000);
     if (contextState.currentSize > 0 && modelsState.selectedInfo.contextSize > 0) {
       const percentage = (contextState.currentSize / modelsState.selectedInfo.contextSize) * 100;
@@ -77,7 +82,7 @@ import { contextState } from '../stores/context.svelte';
       onclick={onRoleClick}
       aria-label="Select role"
     >
-      {rolesState.selectedInfo.name}
+      {authState.isAuthenticated ? rolesState.selectedInfo.name : 'whoami'}
     </button>
   </div>
   
@@ -99,6 +104,7 @@ import { contextState } from '../stores/context.svelte';
     grid-template-columns: 1fr auto 1fr;
     align-items: center;
     padding: 10px 20px;
+    padding-top: max(10px, env(safe-area-inset-top));
     background: #111;
     border-bottom: 1px solid #333;
     min-height: 60px;

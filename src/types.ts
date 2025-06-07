@@ -88,12 +88,12 @@ export interface ChatCompletionResponse {
 // API Request/Response Types - 클라이언트와 서버 간 공통 타입
 // =============================================================================
 
-// 기본 API 응답 형식
+// 기본 API 응답 형식 - 모든 엔드포인트에서 사용하는 표준 형식
 export interface ApiResponse<T = any> {
-  success?: boolean;
-  response?: string;
-  error?: string;
+  success: boolean;
   data?: T;
+  message?: string;
+  error?: string;
 }
 
 // 인증 관련
@@ -101,13 +101,14 @@ export interface LoginRequest {
   password: string;
 }
 
-export interface LoginResponse extends ApiResponse {
-  login_success?: boolean;
+export interface LoginResponseData {
+  login_success: boolean;
   login_failed?: boolean;
   session_token?: string;
+  response: string;
 }
 
-export interface AuthStatusResponse extends ApiResponse {
+export interface AuthStatusData {
   authenticated: boolean;
   method?: 'server' | 'api-key';
   contextUsage?: string;
@@ -118,8 +119,9 @@ export interface SetApiKeyRequest {
   apiKey: string;
 }
 
-export interface SetApiKeyResponse extends ApiResponse {
-  success: boolean;
+export interface SetApiKeyResponseData {
+  message: string;
+  response: string;
 }
 
 // 모델 관련
@@ -131,16 +133,20 @@ export interface ModelInfo {
   selected?: boolean;
 }
 
-export interface ModelsResponse extends ApiResponse {
+export interface ModelsResponseData {
   models: ModelInfo[];
+  response?: string;
+  cached: boolean;
+  user_api_key: boolean;
 }
 
 export interface SetModelRequest {
   model: string;
 }
 
-export interface SetModelResponse extends ApiResponse {
-  success: boolean;
+export interface SetModelResponseData {
+  response: string;
+  model: string;
 }
 
 // 역할 관련
@@ -148,10 +154,12 @@ export interface RoleInfo {
   id: string;
   name: string;
   description?: string;
+  icon?: string;
+  category?: string;
   selected?: boolean;
 }
 
-export interface RolesResponse extends ApiResponse {
+export interface RolesResponseData {
   roles: RoleInfo[];
 }
 
@@ -159,8 +167,8 @@ export interface SetRoleRequest {
   role: string;
 }
 
-export interface SetRoleResponse extends ApiResponse {
-  success: boolean;
+export interface SetRoleResponseData {
+  role: RoleInfo;
 }
 
 // 채팅 관련
@@ -168,21 +176,31 @@ export interface ChatRequest {
   message: string;
 }
 
-export interface ChatResponse extends ApiResponse {
-  response?: string;
-  model?: string;
+export interface ChatResponseData {
+  response: string;
+  model: string;
   usage?: Usage;
+  role: string;
+  currentModel: string;
+  tokensUsed?: number;
+  messageCount?: number;
 }
 
 // 컨텍스트 관련
-export interface ContextInfo {
-  usage?: string;
-  maxSize?: number;
-  currentSize?: number;
+export interface ContextData {
+  context: {
+    id: string;
+    messageCount: number;
+    summary?: string;
+    tokenUsage: number;
+    lastUpdated: string;
+  };
 }
 
-export interface ContextResponse extends ApiResponse {
-  usage?: string;
-  maxSize?: number;
-  currentSize?: number;
+export interface ContextStatsData {
+  stats: any;
+}
+
+export interface HelpResponseData {
+  message: string;
 }

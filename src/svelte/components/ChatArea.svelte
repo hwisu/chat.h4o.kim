@@ -18,7 +18,19 @@ import { uiState } from '../stores/ui.svelte';
   $effect(() => {
     // messagesState 변경을 감지하여 스크롤 조정
     messagesState.length;
-    scrollToBottom();
+    // DOM 업데이트 후 스크롤 실행
+    setTimeout(() => {
+      scrollToBottom();
+    }, 0);
+  });
+
+  // 로딩 상태 변경 시에도 스크롤 (로딩 인디케이터가 나타날 때)
+  $effect(() => {
+    if (uiState.isLoading) {
+      setTimeout(() => {
+        scrollToBottom();
+      }, 0);
+    }
   });
 
   onMount(() => {
@@ -27,30 +39,26 @@ import { uiState } from '../stores/ui.svelte';
 
   // 환영 메시지 생성
   function getWelcomeMessage() {
-    const currentTime = new Date().toLocaleString();
-    
-    return `[SYSTEM] ${currentTime}
+    return `🌟 Welcome to Chat.h4o!
 
-🌟 Choose access method:
+🔐 To get started, click on the Model button to authenticate
+🎭 After authentication, you can select your preferred AI model and role
 
-🔐 Server Login: /login <password>
-🔑 Personal Key: /set-api-key <key>
-
-💡 Choose ONE option`;
+💡 Authentication required to access AI models and chat features`;
   }
 </script>
 
 <div class="chat-output" bind:this={chatContainer}>
   <!-- 시스템 환영 메시지 -->
   {#if uiState.showSystemMessage && !authState.isAuthenticated}
-    <div class="message system">
-      <div class="message-content">
-        {@html getWelcomeMessage().replace(/\n/g, '<br>')}
-      </div>
-      <div class="message-timestamp">
-        {new Date().toLocaleTimeString()}
-      </div>
-    </div>
+    <ChatMessage 
+      role="system"
+      content={getWelcomeMessage()}
+      timestamp={Date.now()}
+      model=""
+      tokenUsage={{}}
+      type=""
+    />
   {/if}
 
   <!-- 채팅 메시지들 -->
@@ -59,9 +67,9 @@ import { uiState } from '../stores/ui.svelte';
       role={message.role}
       content={message.content}
       timestamp={typeof message.timestamp === 'object' ? message.timestamp.getTime() : message.timestamp}
-      model={(message as any).model || ''}
-      tokenUsage={(message as any).tokenUsage || {}}
-      type={(message as any).type || ''}
+      model={message.model || ''}
+      tokenUsage={message.tokenUsage || {}}
+      type={message.type || ''}
     />
   {/each}
 
@@ -86,36 +94,19 @@ import { uiState } from '../stores/ui.svelte';
     flex: 1;
     overflow-y: auto;
     padding: 20px;
-    padding-top: 80px; /* 상단 고정 헤더를 위한 공간 */
+    padding-top: max(80px, calc(60px + env(safe-area-inset-top))); /* 상단 고정 헤더를 위한 공간 + 노치 대응 */
     padding-bottom: 120px; /* 하단 입력창을 위한 공간 */
     background: #0a0a0a;
     scroll-behavior: smooth;
   }
 
-  .message {
+  .message.loading {
     margin-bottom: 20px;
     opacity: 0;
     animation: fadeIn 0.3s ease-in-out forwards;
-  }
-
-
-
-  .message.loading {
     background: rgba(255, 255, 255, 0.05);
     border-radius: 8px;
     padding: 15px;
-  }
-
-  .message-content {
-    font-size: 14px;
-    line-height: 1.6;
-    margin-bottom: 8px;
-  }
-
-  .message-timestamp {
-    font-size: 10px;
-    color: #666;
-    opacity: 0.7;
   }
 
   .loading-dots {
