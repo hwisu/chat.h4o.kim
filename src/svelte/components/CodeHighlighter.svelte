@@ -1,9 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  // 모든 언어 지원으로 복구
-  import hljs from 'highlight.js';
   import { marked } from 'marked';
-  import 'highlight.js/styles/github-dark.css';
 
   interface Props {
     content?: string;
@@ -14,6 +11,25 @@
 
   let container: HTMLElement;
   let processedContent = $state('');
+  let hljs: any = null;
+  let isHighlightLoaded = $state(false);
+
+  // Highlight.js 전체 라이브러리 동적 로딩
+  async function loadHighlightJS() {
+    if (hljs) return hljs;
+    
+    try {
+      // 전체 라이브러리 로드 (모든 언어 포함)
+      const module = await import('highlight.js');
+      hljs = module.default;
+      isHighlightLoaded = true;
+      console.log('✅ Highlight.js (full) loaded dynamically');
+      return hljs;
+    } catch (error) {
+      console.warn('❌ Failed to load highlight.js:', error);
+      return null;
+    }
+  }
 
   // content prop 변화를 즉시 로그로 확인
   $effect(() => {
@@ -32,27 +48,33 @@
   }
 
   // 코드 하이라이트 전담 함수
-  function highlightCode(code: string, language?: string): string {
+  async function highlightCode(code: string, language?: string): Promise<string> {
     // console.log('🎨 highlightCode called with:', { 
     //   codeLength: code.length, 
     //   language, 
     //   codePreview: code.substring(0, 50) + '...' 
     // });
     
-    // console.log('✅ hljs available, available languages:', hljs.listLanguages?.() || 'listLanguages not available');
+    // highlight.js가 아직 로드되지 않았으면 로드 시도
+    if (!hljs) {
+      hljs = await loadHighlightJS();
+    }
+
+    // highlight.js 로드 실패시 fallback
+    if (!hljs) {
+      return escapeHtml(code);
+    }
 
     try {
       if (language && hljs.getLanguage(language)) {
         // console.log(`🔍 Highlighting with specific language: ${language}`);
         const result = hljs.highlight(code.trim(), { language: language });
         // console.log('✅ Code highlighting successful for', language, 'result length:', result.value.length);
-        // console.log('🎨 Highlighted result preview:', result.value.substring(0, 100) + '...');
         return result.value;
       } else {
         // console.log('🔍 Auto-detecting language...');
         const result = hljs.highlightAuto(code.trim());
         // console.log('✅ Auto-highlighting successful, detected language:', result.language, 'result length:', result.value.length);
-        // console.log('🎨 Highlighted result preview:', result.value.substring(0, 100) + '...');
         return result.value;
       }
     } catch (err) {
@@ -61,34 +83,26 @@
     }
   }
 
-  // 마크다운 처리 함수
-  function processMarkdown(text: string): string {
+  // 마크다운 처리 함수 (async로 변경)
+  async function processMarkdown(text: string): Promise<string> {
     // console.log('📝 processMarkdown called with text length:', text.length);
-    // console.log('📝 Text preview:', text.substring(0, 200) + '...');
     
     if (!text) {
       // console.log('❌ No text provided');
       return '';
     }
     
-    // console.log('🔍 Using npm packages: marked and hljs available');
-    
     try {
       // 커스텀 renderer 생성
       const renderer = new marked.Renderer();
       
-      // code 메서드 오버라이드
+      // code 메서드 오버라이드 (async 처리)
+      const originalCode = renderer.code;
       renderer.code = function({ text, lang }: { text: string, lang?: string }) {
-        // console.log('🔧 renderer.code called:', { 
-        //   codeLength: text.length, 
-        //   language: lang,
-        //   codePreview: text.substring(0, 50) + '...'
-        // });
-        
-        const highlightedCode = highlightCode(text, lang);
-        // console.log('🔧 renderer.code result length:', highlightedCode.length);
-        
-        return `<pre><code class="language-${lang || 'text'} hljs">${highlightedCode}</code></pre>`;
+        // 동기적으로 처리하기 위해 Promise를 즉시 resolve하는 형태로 변경
+        // marked는 동기 렌더링을 기대하므로, 일단 기본 형태로 반환하고
+        // 나중에 별도로 하이라이팅 적용
+        return `<pre><code class="language-${lang || 'text'} needs-highlight" data-lang="${lang || ''}">${escapeHtml(text)}</code></pre>`;
       };
       
       // marked 설정
@@ -100,12 +114,32 @@
       
       const result = marked.parse(text) as string;
       // console.log('✅ Markdown parsing successful, result length:', result.length);
-      // console.log('📝 Parsed result preview:', result.substring(0, 200) + '...');
       return result;
     } catch (err) {
       // console.warn('❌ Markdown parsing failed:', err);
-      // console.log('🔄 Falling back to fallbackMarkdown');
       return fallbackMarkdown(text);
+    }
+  }
+
+  // 하이라이팅 후처리
+  async function applyHighlighting() {
+    if (!container || !hljs) return;
+    
+    const codeBlocks = container.querySelectorAll('code.needs-highlight');
+    for (let i = 0; i < codeBlocks.length; i++) {
+      const block = codeBlocks[i];
+      const lang = block.getAttribute('data-lang') || '';
+      const text = block.textContent || '';
+      
+      try {
+        const highlighted = await highlightCode(text, lang);
+        block.innerHTML = highlighted;
+        block.classList.remove('needs-highlight');
+        block.classList.add('hljs');
+      } catch (error) {
+        console.warn('Failed to highlight code block:', error);
+        block.classList.remove('needs-highlight');
+      }
     }
   }
 
@@ -115,24 +149,13 @@
     
     const result = text
       .replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
-        // console.log('🔄 fallback processing code block:', { 
-        //   lang, 
-        //   codeLength: code.length,
-        //   codePreview: code.substring(0, 50) + '...'
-        // });
-        const highlightedCode = highlightCode(code, lang);
-        // console.log('🔄 fallback highlighted code length:', highlightedCode.length);
-        const blockResult = `<pre><code class="language-${lang || 'text'} hljs">${highlightedCode}</code></pre>`;
-        // console.log('🔄 fallback block result length:', blockResult.length);
-        return blockResult;
+        return `<pre><code class="language-${lang || 'text'} needs-highlight" data-lang="${lang || ''}">${escapeHtml(code)}</code></pre>`;
       })
       .replace(/`([^`]+)`/g, '<code>$1</code>')
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
       .replace(/\n/g, '<br>');
     
-    // console.log('🔄 fallbackMarkdown result length:', result.length);
-    // console.log('🔄 fallbackMarkdown result preview:', result.substring(0, 200) + '...');
     return result;
   }
 
@@ -174,15 +197,17 @@
     });
   }
 
-  // 콘텐츠 처리 및 렌더링
-  function processContent() {
+  // 콘텐츠 처리 및 렌더링 (async로 변경)
+  async function processContent() {
     // console.log('🚀 processContent called with content length:', content.length);
-    // console.log('🚀 Content preview:', content.substring(0, 100) + '...');
     
-    processedContent = processMarkdown(content);
+    processedContent = await processMarkdown(content);
+    
+    // DOM 업데이트 후 하이라이팅 적용
+    await tick();
+    await applyHighlighting();
     
     // console.log('🚀 processContent finished, processedContent length:', processedContent.length);
-    // console.log('🚀 ProcessedContent preview:', processedContent.substring(0, 200) + '...');
   }
 
   // 반응형 업데이트
@@ -200,13 +225,27 @@
   });
 
   onMount(() => {
-    processContent();
+    // 코드 블록이 있는 경우에만 highlight.js 로드
+    if (content.includes('```')) {
+      loadHighlightJS().then(() => {
+        processContent();
+      });
+    } else {
+      processContent();
+    }
   });
 </script>
 
 <div bind:this={container} class="code-highlighter" class:user={role === 'user'} class:assistant={role === 'assistant'}>
   {@html processedContent}
 </div>
+
+<!-- highlight.js CSS는 동적으로 로드 -->
+<svelte:head>
+  {#if isHighlightLoaded}
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">
+  {/if}
+</svelte:head>
 
 <style>
   .code-highlighter {

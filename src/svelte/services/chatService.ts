@@ -8,6 +8,16 @@ import { generateMessageId } from './utils';
 
 export class ChatService {
   /**
+   * 스크롤을 하단으로 강제 이동
+   */
+  private ensureScrollToBottom(): void {
+    const chatContainer = document.querySelector('.chat-output');
+    if (chatContainer) {
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+  }
+
+  /**
    * 메시지 전송 처리
    */
   async sendMessage(content: string): Promise<void> {
@@ -63,6 +73,11 @@ export class ChatService {
       type: type
     };
     addMessage(message);
+    
+    // 시스템 메시지는 즉시 표시되므로 스크롤 확인 (특히 /models 등 긴 응답)
+    setTimeout(() => {
+      this.ensureScrollToBottom();
+    }, 200);
   }
 
   /**

@@ -18,10 +18,10 @@ import { uiState } from '../stores/ui.svelte';
   $effect(() => {
     // messagesState 변경을 감지하여 스크롤 조정
     messagesState.length;
-    // DOM 업데이트 후 스크롤 실행
+    // DOM 업데이트 후 스크롤 실행 - 시간 늘려서 컨텐츠 렌더링 완료까지 대기
     setTimeout(() => {
       scrollToBottom();
-    }, 0);
+    }, 100);
   });
 
   // 로딩 상태 변경 시에도 스크롤 (로딩 인디케이터가 나타날 때)
@@ -29,7 +29,16 @@ import { uiState } from '../stores/ui.svelte';
     if (uiState.isLoading) {
       setTimeout(() => {
         scrollToBottom();
-      }, 0);
+      }, 50);
+    }
+  });
+
+  // 추가: 로딩 상태가 끝날 때도 스크롤 확인
+  $effect(() => {
+    if (!uiState.isLoading && messagesState.length > 0) {
+      setTimeout(() => {
+        scrollToBottom();
+      }, 150);
     }
   });
 

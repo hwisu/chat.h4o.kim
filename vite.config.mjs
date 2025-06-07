@@ -87,8 +87,8 @@ export default defineConfig(({ command, mode }) => {
       }
     },
     optimizeDeps: {
-      include: ['highlight.js', 'marked'],
-      exclude: []
+      include: ['marked'],
+      exclude: ['highlight.js'] // 동적 로딩으로 변경
     },
     server: {
       proxy: {

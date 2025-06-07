@@ -24,9 +24,13 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23000'/%3E%3Ctext y='70' font-size='60' fill='%2300ff00'%3E$%3C/text%3E%3C/svg%3E">
     <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' fill='%23000' rx='20'/%3E%3Ctext x='90' y='110' text-anchor='middle' font-size='100' fill='%2300ff00'%3E$%3C/text%3E%3C/svg%3E">
 
-    <!-- Fonts -->
+    <!-- Critical Resource Preloads -->
     <link rel="preconnect" href="https://fastly.jsdelivr.net" crossorigin>
-    <!-- MonoplexKRNerd 폰트 최적화 로딩 - Regular만 preload -->
+    <link rel="preload" href="/svelte/main.css" as="style">
+    <link rel="preload" href="/svelte/components.css" as="style">
+    <link rel="preload" href="/svelte/bundle.js" as="script">
+    
+    <!-- Font Preload (기존 유지) -->
     <link rel="preload" href="https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_Monoplex-nerd@1.0/MonoplexKRNerd-Bold.woff2" as="font" type="font/woff2" crossorigin>
     
     <!-- 모노플렉스Nerd 폰트 -->
@@ -40,7 +44,7 @@
       }
     </style>
 
-    <!-- Styles -->
+    <!-- Critical Styles -->
     <style>
         * {
             margin: 0;
@@ -63,23 +67,88 @@
             margin: 0;
             padding: 0;
         }
+
+        /* Loading indicator */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            opacity: 1;
+            transition: opacity 0.3s ease;
+        }
+        
+        .loading-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .loading-text {
+            color: #00ff00;
+            font-family: 'MonoplexKRNerd', monospace;
+            font-size: 18px;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
     </style>
+    
+    <!-- Critical CSS First -->
     <link rel="stylesheet" href="/svelte/main.css">
     <link rel="stylesheet" href="/svelte/components.css">
-    <link rel="stylesheet" href="/svelte/modals.css">
-    <link rel="stylesheet" href="/svelte/highlight.css">
+    <!-- Non-critical CSS with media preload trick -->
+    <link rel="preload" href="/svelte/modals.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript>
+        <link rel="stylesheet" href="/svelte/modals.css">
+    </noscript>
 </head>
 <body>
+    <!-- Loading Screen -->
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="loading-text">$ initializing chatty...</div>
+    </div>
+    
     <!-- Svelte 앱이 전체 UI를 담당 -->
     <div id="svelte-app"></div>
 
-    <!-- External Libraries (Svelte 앱에서 사용) -->
-    <script src="https://unpkg.com/lz-string@1.5.0/libs/lz-string.min.js"></script>
-
-    <!-- Svelte 앱 -->
+    <!-- Critical JavaScript First -->
     <script type="module" src="/svelte/bundle.js"></script>
 
-    <!-- PWA Service Worker -->
+    <!-- Deferred External Libraries -->
+    <script>
+        // Defer non-critical libraries
+        function loadScript(src) {
+            const script = document.createElement('script');
+            script.src = src;
+            script.defer = true;
+            document.head.appendChild(script);
+        }
+        
+        // Load LZ-String when needed (not immediately)
+        window.addEventListener('load', () => {
+            loadScript('https://unpkg.com/lz-string@1.5.0/libs/lz-string.min.js');
+            
+            // Hide loading overlay after app loads
+            setTimeout(() => {
+                const overlay = document.getElementById('loading-overlay');
+                if (overlay) {
+                    overlay.classList.add('hidden');
+                    setTimeout(() => overlay.remove(), 300);
+                }
+            }, 500);
+        });
+    </script>
+
+    <!-- PWA Service Worker (Deferred) -->
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
