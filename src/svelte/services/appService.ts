@@ -2,25 +2,25 @@
  * 앱 초기화 및 주요 기능 관리 서비스
  */
 
-import { apiClient } from './apiClient';
 import { updateAuth } from '../stores/auth.svelte';
+import { updateContext } from '../stores/context.svelte';
 import { updateModels } from '../stores/models.svelte';
 import { updateRoles } from '../stores/roles.svelte';
-import { updateContext } from '../stores/context.svelte';
-import { setLoading, setError, clearError } from '../stores/ui.svelte';
-import type { ModelInfo, RoleInfo, ServiceApiResponse } from './types';
-import { 
-  DEFAULT_VALUES, 
-  AUTH_METHODS 
+import { clearError, setError, setLoading } from '../stores/ui.svelte';
+import { apiClient } from './apiClient';
+import {
+    AUTH_METHODS,
+    DEFAULT_VALUES
 } from './constants';
-import { 
-  extractErrorMessage, 
-  calculateContextPercentage, 
-  createDefaultModelInfo, 
-  createDefaultRoleInfo,
-  getWelcomeMessage,
-  ensureArray,
-  isNonEmptyArray
+import type { ModelInfo, RoleInfo, ServiceApiResponse } from './types';
+import {
+    calculateContextPercentage,
+    createDefaultModelInfo,
+    createDefaultRoleInfo,
+    ensureArray,
+    extractErrorMessage,
+    getWelcomeMessage,
+    isNonEmptyArray
 } from './utils';
 
 export class AppService {
@@ -271,7 +271,14 @@ export class AppService {
         await this.loadAllData();
         
         console.log('[AppService] Login completed successfully');
-        return { success: true };
+        // 서버에서 온 메시지를 그대로 전달
+        return { 
+          success: true, 
+          data: {
+            ...result.data,
+            message: result.data?.message || 'Login successful'
+          }
+        };
       } else {
         console.log('[AppService] Login failed:', result.error);
         setError(result.error || 'Login failed');

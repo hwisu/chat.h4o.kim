@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
-import { Env, OpenRouterModelsResponse, OpenRouterModel, ModelInfo } from '../types';
 import { authRequired } from '../middleware/auth';
-import { RESPONSE_MESSAGES, API_CONFIG, MODEL_CONFIG, HTTP_STATUS } from './constants';
-import { successResponse, errorResponse, asyncHandler, parseJsonBody, getCookieValue, setCookie, fetchWithTimeout } from './utils';
+import { Env, ModelInfo, OpenRouterModel, OpenRouterModelsResponse } from '../types';
+import { API_CONFIG, ErrorStatus, MODEL_CONFIG, RESPONSE_MESSAGES } from './constants';
+import { asyncHandler, errorResponse, fetchWithTimeout, getCookieValue, parseJsonBody, setCookie, successResponse } from './utils';
 
 const models = new Hono<{ Bindings: Env }>();
 
@@ -16,7 +16,7 @@ interface ModelCache {
 let modelsCache: ModelCache | null = null;
 
 // Transform OpenRouterModel to ModelInfo format
-function transformToModelInfo(openRouterModel: OpenRouterModel, isSelected: boolean = false): ModelInfo {
+function transformToModelInfo(openRouterModel: OpenRouterModel, isSelected = false): ModelInfo {
   // Extract provider from model name or id
   let provider = 'Unknown';
   if (openRouterModel.name.includes(':')) {
@@ -26,9 +26,9 @@ function transformToModelInfo(openRouterModel: OpenRouterModel, isSelected: bool
   }
 
   // Clean model name - remove (free) tags and :free suffixes
-  let cleanName = openRouterModel.name;
-  cleanName = cleanName.replace(/\s*\(free\)\s*$/i, '');
-  cleanName = cleanName.replace(/:free\s*$/i, '');
+  let cleanName = openRouterModel.name
+    .replace(/\s*\(free\)\s*$/i, '')
+    .replace(/:free\s*$/i, '');
 
   return {
     id: openRouterModel.id,
@@ -47,26 +47,18 @@ function transformModelsArray(openRouterModels: OpenRouterModel[], selectedModel
 }
 
 // Utility Functions
-function getProviderPriority(modelId: string, isUserApiKey: boolean = false): number {
+function getProviderPriority(modelId: string, isUserApiKey = false): number {
   const lowerModelId = modelId.toLowerCase();
   
-  if (isUserApiKey) {
-    // Premium models priority for user API keys
-    if (lowerModelId.includes('claude')) return 1;
-    if (lowerModelId.includes('gpt-4')) return 2;
-    if (lowerModelId.includes('meta') || lowerModelId.includes('llama')) return 3;
-    if (lowerModelId.includes('google')) return 4;
-    if (lowerModelId.includes('deepseek')) return 5;
-    if (lowerModelId.includes('gemma')) return 6;
-    return 7;
-  } else {
-    // Free models priority
-    if (lowerModelId.includes('meta') || lowerModelId.includes('llama')) return 1;
-    if (lowerModelId.includes('google')) return 2;
-    if (lowerModelId.includes('deepseek')) return 3;
-    if (lowerModelId.includes('gemma')) return 4;
-    return 5;
+  const priorities = isUserApiKey ? MODEL_CONFIG.PREMIUM_MODEL_PRIORITIES : MODEL_CONFIG.FREE_MODEL_PRIORITIES;
+  
+  for (let i = 0; i < priorities.length; i++) {
+    if (lowerModelId.includes(priorities[i])) {
+      return i + 1;
+    }
   }
+  
+  return priorities.length + 1; // Lower priority for unknown providers
 }
 
 function getContextSize(model: OpenRouterModel): number {
@@ -78,47 +70,79 @@ function getContextSize(model: OpenRouterModel): number {
 
   const modelId = model.id.toLowerCase();
   
-  // Pattern-based estimation
-  if (modelId.includes('128k')) return 128000;
-  if (modelId.includes('32k')) return 32000;
-  if (modelId.includes('16k')) return 16000;
-  if (modelId.includes('8k')) return 8000;
-  if (modelId.includes('4k')) return 4000;
+  // Pattern-based estimation for context window sizes
+  const contextPatterns = [
+    { pattern: '128k', size: 128000 },  // Large context models
+    { pattern: '32k', size: 32000 },    // Medium-large context models
+    { pattern: '16k', size: 16000 },    // Medium context models
+    { pattern: '8k', size: 8000 },      // Standard context models
+    { pattern: '4k', size: 4000 }       // Small context models
+  ];
+  
+  for (const { pattern, size } of contextPatterns) {
+    if (modelId.includes(pattern)) return size;
+  }
 
-  // Model family estimation
-  if (modelId.includes('llama-3.3') || modelId.includes('llama-3.2') || modelId.includes('llama-3.1')) return 128000;
-  if (modelId.includes('deepseek') || modelId.includes('gemini')) return 32000;
-  if (modelId.includes('gemma-2')) return 8000;
+  // Model family context size estimation
+  const familyPatterns = [
+    { patterns: ['llama-3.3', 'llama-3.2', 'llama-3.1'], size: 128000 }, // Latest Llama models have large context
+    { patterns: ['deepseek', 'gemini'], size: 32000 },                    // DeepSeek and Gemini typically have 32k context
+    { patterns: ['gemma-2'], size: 8000 }                                 // Gemma-2 models have 8k context
+  ];
+  
+  for (const { patterns, size } of familyPatterns) {
+    if (patterns.some(pattern => modelId.includes(pattern))) {
+      return size;
+    }
+  }
 
-  return 4000; // Conservative default
+  return MODEL_CONFIG.CONTEXT_SIZE_FALLBACK; // Conservative default from config
 }
 
 function formatModelsResponse(models: OpenRouterModel[]): string {
-  let response = `📋 Available Models (${models.length} total)\n\n`;
-  models.forEach(model => response += `${model.id}\n`);
-  response += `\nUsage: /set-model <model-id> or /set-model auto`;
-  return response;
+  const lines = [
+    `📋 Available Models (${models.length} total)`,
+    '',
+    ...models.map(model => model.id),
+    '',
+    'Usage: /set-model <model-id> or /set-model auto'
+  ];
+  
+  return lines.join('\n');
 }
 
 // Filter free models with quality criteria
 export function filterFreeModels(models: OpenRouterModel[]): OpenRouterModel[] {
   return models
-    .filter((m: OpenRouterModel) =>
-      m.id.endsWith(':free') &&
-      !m.id.toLowerCase().match(/mini|micro|small/) &&
-      (!m.id.toLowerCase().match(/(\d+(?:\.\d+)?)b/) ||
-        parseFloat(m.id.toLowerCase().match(/(\d+(?:\.\d+)?)b/)?.[1] || '8') >= 8)
-    )
+    .filter((m: OpenRouterModel) => {
+      // Only include models ending with :free
+      if (!m.id.endsWith(':free')) return false;
+      
+      // Exclude small/low-quality models
+      if (m.id.toLowerCase().match(/mini|micro|small/)) return false;
+      
+      // Filter by model size (require minimum 8B parameters for quality)
+      const sizeMatch = m.id.toLowerCase().match(/(\d+(?:\.\d+)?)b/);
+      if (sizeMatch) {
+        const size = parseFloat(sizeMatch[1]);
+        return size >= MODEL_CONFIG.MIN_FREE_MODEL_SIZE_B;
+      }
+      
+      return true;
+    })
     .sort((a, b) => {
+      // Sort by provider priority first
       const aPriority = getProviderPriority(a.id, false);
       const bPriority = getProviderPriority(b.id, false);
 
       if (aPriority !== bPriority) return aPriority - bPriority;
 
+      // Then by context size (larger is better)
       const aContext = getContextSize(a);
       const bContext = getContextSize(b);
       if (aContext !== bContext) return bContext - aContext;
 
+      // Finally by alphabetical order
       return a.id.localeCompare(b.id);
     });
 }
@@ -132,7 +156,7 @@ export function getApiKey(c: any): string {
     return userApiKey;
   }
 
-  if (serverApiKey) {
+  if (serverApiKey?.trim()) {
     return serverApiKey;
   }
 
@@ -140,7 +164,7 @@ export function getApiKey(c: any): string {
 }
 
 // Get selected model from cookie
-export function getSelectedModelFromCookie(c: any): string | null {
+export function getSelectedModelFromCookie(c: any): string | undefined {
   return getCookieValue(c, 'selected_model');
 }
 
@@ -149,194 +173,202 @@ export async function autoSelectModel(c: any, apiKey: string, skipLog?: boolean)
   try {
     let freeModels: OpenRouterModel[] = [];
 
-    // Check cache first - need to handle different cache format
-    if (modelsCache && Date.now() - modelsCache.timestamp < API_CONFIG.CACHE_DURATION) {
-      // Convert cached ModelInfo back to OpenRouterModel for processing
-      freeModels = []; // We'll use the cached data differently
-    } else {
-      // Fetch with timeout
-      try {
-        const modelsResponse = await fetchWithTimeout(`${API_CONFIG.OPENROUTER_BASE_URL}/models`, {
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          timeout: API_CONFIG.REQUEST_TIMEOUT,
-          cf: { cacheTtl: 300, cacheEverything: true }
-        });
-
-        if (modelsResponse.ok) {
-          const modelsData: OpenRouterModelsResponse = await modelsResponse.json();
-          freeModels = filterFreeModels(modelsData.data);
-
-          modelsCache = {
-            data: transformModelsArray(freeModels),
-            timestamp: Date.now(),
-            type: 'server'
-          };
+    // Check cache first (5 minute TTL from MODEL_CONFIG)
+    if (modelsCache && Date.now() - modelsCache.timestamp < MODEL_CONFIG.MODEL_CACHE_TTL_MS) {
+      // Use cached data
+      if (modelsCache.data.length > 0) {
+        const selectedModel = modelsCache.data[0].id;
+        if (!skipLog) {
+          console.log(`🔄 Using cached auto-selected model: ${selectedModel}`);
         }
-      } catch (error: any) {
-        if (error.name !== 'AbortError') {
-          console.warn('Models fetch failed:', error);
-        }
+        return selectedModel;
       }
     }
 
-    // Use cached data if available and no fresh data
-    if (freeModels.length === 0 && modelsCache?.data && modelsCache.data.length > 0) {
-      const selectedModel = modelsCache.data[0].id;
-      if (!skipLog) {
-        console.log(`🎯 Auto-selected model from cache: ${selectedModel}`);
-      }
-      return selectedModel;
+    // Fetch fresh models if cache miss or expired
+    const allModels = await fetchModels(apiKey, !!c.req.header('X-User-API-Key'));
+    freeModels = filterFreeModels(allModels);
+
+    if (freeModels.length === 0) {
+      throw new Error('No suitable free models available');
     }
-
-    if (freeModels.length > 0) {
-      const selectedModel = freeModels[0].id;
-      if (!skipLog) {
-        console.log(`🎯 Auto-selected model: ${selectedModel}`);
-      }
-      return selectedModel;
-    }
-  } catch (error) {
-    console.warn('Auto-selection failed:', error);
-  }
-
-  return MODEL_CONFIG.DEFAULT_MODEL;
-}
-
-// Get selected model with auto-selection support
-export async function getSelectedModel(c: any, requestedModel?: string, skipLog?: boolean): Promise<string> {
-  const apiKey = getApiKey(c);
-  const selectedModelCookie = getSelectedModelFromCookie(c);
-
-  let selectedModel = selectedModelCookie || requestedModel || MODEL_CONFIG.DEFAULT_MODEL;
-
-  if (selectedModel === MODEL_CONFIG.AUTO_SELECT || (!selectedModelCookie && !requestedModel)) {
-    selectedModel = await autoSelectModel(c, apiKey, skipLog);
-  }
-
-  return selectedModel;
-}
-
-// Fetch and process models from API
-async function fetchModels(apiKey: string, hasUserApiKey: boolean): Promise<OpenRouterModel[]> {
-  const modelsResponse = await fetchWithTimeout(`${API_CONFIG.OPENROUTER_BASE_URL}/models`, {
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    timeout: API_CONFIG.REQUEST_TIMEOUT,
-    cf: { cacheTtl: 300, cacheEverything: true }
-  });
-
-  if (!modelsResponse.ok) {
-    if (modelsResponse.status === HTTP_STATUS.UNAUTHORIZED) {
-      throw new Error(RESPONSE_MESSAGES.INVALID_API_KEY);
-    }
-    throw new Error(RESPONSE_MESSAGES.MODELS_FETCH_FAILED);
-  }
-
-  const modelsData: OpenRouterModelsResponse = await modelsResponse.json();
-
-  // Process models based on API key type
-  if (hasUserApiKey) {
-    // User API key: show all models, sorted by priority
-    return modelsData.data.sort((a, b) => {
-      const aPriority = getProviderPriority(a.id, true);
-      const bPriority = getProviderPriority(b.id, true);
-
-      if (aPriority !== bPriority) return aPriority - bPriority;
-
-      const aContext = getContextSize(a);
-      const bContext = getContextSize(b);
-      return bContext - aContext;
-    });
-  } else {
-    // Server API key: only free models
-    return filterFreeModels(modelsData.data);
-  }
-}
-
-// Routes
-models.get('/models', authRequired, asyncHandler(async (c) => {
-  const apiKey = getApiKey(c);
-  const hasUserApiKey = c.req.header('X-User-API-Key') !== undefined;
-  const cacheKey = hasUserApiKey ? 'user' : 'server';
-  const selectedModelCookie = getSelectedModelFromCookie(c);
-
-  // Check cache first
-  if (modelsCache?.type === cacheKey && Date.now() - modelsCache.timestamp < API_CONFIG.CACHE_DURATION) {
-    return successResponse(c, {
-      models: modelsCache.data,
-      cached: true,
-      user_api_key: hasUserApiKey
-    });
-  }
-
-  try {
-    const processedModels = await fetchModels(apiKey, hasUserApiKey);
-    
-    // Transform to ModelInfo format with selected status
-    const modelInfos = transformModelsArray(processedModels, selectedModelCookie || undefined);
 
     // Update cache
     modelsCache = {
-      data: modelInfos,
+      data: transformModelsArray(freeModels),
       timestamp: Date.now(),
-      type: cacheKey
+      type: c.req.header('X-User-API-Key') ? 'user' : 'server'
     };
 
-    // Debug info for first few models
-    if (processedModels.length > 0) {
-      console.log(`📊 Models context info (first 3):`);
-      processedModels.slice(0, 3).forEach(model => {
-        console.log(`  ${model.id}: ${model.context_length || 'N/A'} tokens`);
-      });
+    const selectedModel = freeModels[0].id;
+    if (!skipLog) {
+      console.log(`🎯 Auto-selected model: ${selectedModel}`);
     }
+    
+    return selectedModel;
+  } catch (error) {
+    console.error('❌ Auto-selection failed:', error);
+    // Fallback to a known free model
+    const fallbackModel = 'meta-llama/llama-3.3-70b-instruct:free';
+    if (!skipLog) {
+      console.log(`🔄 Using fallback model: ${fallbackModel}`);
+    }
+    return fallbackModel;
+  }
+}
+
+// Get selected model with auto-selection fallback
+export async function getSelectedModel(c: any, requestedModel?: string, skipLog?: boolean): Promise<string> {
+  if (requestedModel && requestedModel !== 'auto') {
+    return requestedModel;
+  }
+
+  const cookieModel = getSelectedModelFromCookie(c);
+  if (cookieModel && cookieModel !== 'auto') {
+    return cookieModel;
+  }
+
+  const apiKey = getApiKey(c);
+  return await autoSelectModel(c, apiKey, skipLog);
+}
+
+// Fetch models from OpenRouter API
+async function fetchModels(apiKey: string, hasUserApiKey: boolean): Promise<OpenRouterModel[]> {
+  try {
+    const response = await fetchWithTimeout(`${API_CONFIG.OPENROUTER_BASE_URL}/models`, {
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      timeout: API_CONFIG.REQUEST_TIMEOUT_MS
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const data: OpenRouterModelsResponse = await response.json();
+    
+    if (!data?.data || !Array.isArray(data.data)) {
+      throw new Error('Invalid response format from OpenRouter API');
+    }
+
+    let models = data.data;
+
+    // Filter based on API key type
+    if (!hasUserApiKey) {
+      // Server API key: only show free models
+      models = models.filter(model => model.id.endsWith(':free'));
+    }
+
+    console.log(`📊 Fetched ${models.length} models (${hasUserApiKey ? 'user' : 'server'} API key)`);
+    return models;
+
+  } catch (error) {
+    console.error('Failed to fetch models:', error);
+    throw new Error(RESPONSE_MESSAGES.MODELS_FETCH_FAILED);
+  }
+}
+
+// API Routes
+
+// Get available models
+models.get('/models', authRequired, asyncHandler(async (c) => {
+  try {
+    const apiKey = getApiKey(c);
+    const hasUserApiKey = !!c.req.header('X-User-API-Key');
+    
+    // Check cache first
+    if (modelsCache && Date.now() - modelsCache.timestamp < MODEL_CONFIG.MODEL_CACHE_TTL_MS) {
+      const cacheType = hasUserApiKey ? 'user' : 'server';
+      if (modelsCache.type === cacheType) {
+        return successResponse(c, {
+          models: modelsCache.data,
+          cached: true,
+          cache_age_ms: Date.now() - modelsCache.timestamp
+        });
+      }
+    }
+
+    // Fetch fresh models
+    const openRouterModels = await fetchModels(apiKey, hasUserApiKey);
+    const selectedModelId = getSelectedModelFromCookie(c) || undefined;
+    
+    let filteredModels = openRouterModels;
+    if (!hasUserApiKey) {
+      filteredModels = filterFreeModels(openRouterModels);
+    }
+
+    const transformedModels = transformModelsArray(filteredModels, selectedModelId);
+
+    // Update cache
+    modelsCache = {
+      data: transformedModels,
+      timestamp: Date.now(),
+      type: hasUserApiKey ? 'user' : 'server'
+    };
 
     return successResponse(c, {
-      models: modelInfos,
-      response: formatModelsResponse(processedModels),
+      models: transformedModels,
       cached: false,
-      user_api_key: hasUserApiKey
+      total_available: openRouterModels.length,
+      filtered_count: filteredModels.length
     });
-  } catch (error: any) {
-    if (error.name === 'AbortError' && modelsCache) {
-      // Return cached data on timeout
-      return successResponse(c, {
-        models: modelsCache.data,
-        response: formatModelsResponse([]), // We don't have OpenRouterModel format in cache
-        cached: true,
-        user_api_key: hasUserApiKey
-      });
-    }
 
-    // Handle authentication errors with proper status
-    if (error.message === RESPONSE_MESSAGES.INVALID_API_KEY) {
-      return errorResponse(c, error.message, HTTP_STATUS.UNAUTHORIZED, { auth_required: true });
-    }
-
-    throw error;
+  } catch (error) {
+    console.error('Models endpoint error:', error);
+    const message = error instanceof Error ? error.message : RESPONSE_MESSAGES.MODELS_FETCH_FAILED;
+    return errorResponse(c, message, ErrorStatus.INTERNAL_ERROR);
   }
 }));
 
+// Set selected model
 models.post('/set-model', authRequired, asyncHandler(async (c) => {
-  const { model } = await parseJsonBody<{ model: string }>(c, ['model']);
-
-  if (model === MODEL_CONFIG.AUTO_SELECT) {
-    setCookie(c, 'selected_model', '', 0); // Clear cookie
-    return successResponse(c, {
-      response: RESPONSE_MESSAGES.MODEL_AUTO_SET_SUCCESS,
-      model: MODEL_CONFIG.AUTO_SELECT
-    }, RESPONSE_MESSAGES.MODEL_AUTO_SET_SUCCESS);
+  interface SetModelRequest extends Record<string, unknown> {
+    model: string;
   }
 
-  setCookie(c, 'selected_model', model, API_CONFIG.COOKIE_MAX_AGE);
-  return successResponse(c, {
-    response: RESPONSE_MESSAGES.MODEL_SET_SUCCESS(model),
-    model
-  }, RESPONSE_MESSAGES.MODEL_SET_SUCCESS(model));
+  const { model: rawModel } = await parseJsonBody<SetModelRequest>(c, ['model']);
+
+  // Validate model parameter
+  if (!rawModel || typeof rawModel !== 'string') {
+    return errorResponse(c, RESPONSE_MESSAGES.INVALID_MODEL(String(rawModel)), ErrorStatus.BAD_REQUEST);
+  }
+
+  // Decode URL-encoded model ID (handle double encoding issues)
+  let model = rawModel;
+  try {
+    // Check if the model ID is URL encoded and decode it
+    if (model.includes('%')) {
+      model = decodeURIComponent(model);
+      console.log(`🔄 Decoded model ID: ${rawModel} -> ${model}`);
+    }
+  } catch (error) {
+    console.warn(`⚠️ Failed to decode model ID: ${rawModel}`, error);
+    model = rawModel; // Use original if decoding fails
+  }
+
+  // Handle auto-selection
+  if (model.toLowerCase() === 'auto') {
+    setCookie(c, 'selected_model', 'auto', { maxAge: API_CONFIG.CACHE_DURATION / 1000 });
+    return successResponse(c, { model: 'auto' }, RESPONSE_MESSAGES.MODEL_AUTO_SET_SUCCESS);
+  }
+
+  // Set specific model
+  setCookie(c, 'selected_model', model, { maxAge: API_CONFIG.CACHE_DURATION / 1000 });
+  return successResponse(c, { model }, RESPONSE_MESSAGES.MODEL_SET_SUCCESS);
+}));
+
+// Get currently selected model
+models.get('/selected-model', authRequired, asyncHandler(async (c) => {
+  try {
+    const selectedModel = await getSelectedModel(c);
+    return successResponse(c, { model: selectedModel });
+  } catch (error) {
+    console.error('Selected model error:', error);
+    const message = error instanceof Error ? error.message : 'Failed to get selected model';
+    return errorResponse(c, message, ErrorStatus.INTERNAL_ERROR);
+  }
 }));
 
 export default models;

@@ -1,30 +1,17 @@
 import { Hono } from 'hono';
-import type { 
-  Env, 
-  LoginRequest, 
-  LoginResponseData, 
-  AuthStatusData, 
-  SetApiKeyRequest, 
-  SetApiKeyResponseData 
-} from '../types';
-import { 
-  authenticateUser, 
-  getAuthStatus,
-  checkAuthenticationOrUserKey as checkAuth
+import {
+  authenticateUser,
+  getAuthStatus
 } from '../services/auth';
-import { RESPONSE_MESSAGES, MODEL_CONFIG, HTTP_STATUS } from './constants';
-import { successResponse, errorResponse, asyncHandler, parseJsonBody } from './utils';
+import type {
+  Env,
+  LoginRequest,
+  SetApiKeyRequest
+} from '../types';
+import { HttpStatus, MODEL_CONFIG, ResponseMessage } from './constants';
+import { asyncHandler, errorResponse, parseJsonBody, successResponse } from './utils';
 
 const auth = new Hono<{ Bindings: Env }>();
-
-// Authentication check helper for backward compatibility
-export async function checkAuthenticationOrUserKey(c: any): Promise<boolean> {
-  const sessionToken = c.req.header('X-Session-Token');
-  const userApiKey = c.req.header('X-User-API-Key');
-  const jwtSecret = c.env.JWT_SECRET || c.env.OPENROUTER_API_KEY || 'default-secret-key';
-  
-  return await checkAuth(sessionToken, userApiKey, jwtSecret);
-}
 
 // Login endpoint
 auth.post('/login', asyncHandler(async (c) => {
@@ -36,25 +23,23 @@ auth.post('/login', asyncHandler(async (c) => {
   const result = await authenticateUser(password, accessPassword || '', jwtSecret);
 
   if (result.success) {
-    return successResponse(c, {
-      login_success: true,
-      session_token: result.token,
-      response: result.message
-    }, result.message);
-  } else {
-    return errorResponse(c, result.message, HTTP_STATUS.UNAUTHORIZED, {
-      login_failed: true,
-      response: result.message
-    });
+      return successResponse(c, {
+    login_success: true,
+    session_token: result.token
+  }, ResponseMessage.LOGIN_SUCCESS);
   }
+
+  return errorResponse(c, result.message, HttpStatus.UNAUTHORIZED, {
+    login_failed: true
+  });
 }));
 
-// Get authentication status
+// Get authentication status - single endpoint
 auth.get('/auth-status', asyncHandler(async (c) => {
   const sessionToken = c.req.header('X-Session-Token');
   const userApiKey = c.req.header('X-User-API-Key');
   const jwtSecret = c.env.JWT_SECRET || c.env.OPENROUTER_API_KEY || 'default-secret-key';
-
+  
   const status = await getAuthStatus(sessionToken, userApiKey, jwtSecret);
   return successResponse(c, status);
 }));
@@ -65,28 +50,21 @@ auth.post('/set-api-key', asyncHandler(async (c) => {
 
   // Validate API key format
   if (!apiKey.startsWith(MODEL_CONFIG.API_KEY_PREFIX)) {
-    return errorResponse(c, `Invalid API key format. Must start with ${MODEL_CONFIG.API_KEY_PREFIX}`, HTTP_STATUS.BAD_REQUEST);
+    return errorResponse(
+      c, 
+      `Invalid API key format. Must start with ${MODEL_CONFIG.API_KEY_PREFIX}`, 
+      HttpStatus.BAD_REQUEST
+    );
   }
 
   // Validate API key length
   if (apiKey.length < MODEL_CONFIG.MIN_API_KEY_LENGTH) {
-    return errorResponse(c, 'Invalid API key length', HTTP_STATUS.BAD_REQUEST);
+    return errorResponse(c, 'Invalid API key length', HttpStatus.BAD_REQUEST);
   }
 
   return successResponse(c, {
-    message: RESPONSE_MESSAGES.API_KEY_SET_SUCCESS,
-    response: RESPONSE_MESSAGES.API_KEY_VALIDATED
-  }, RESPONSE_MESSAGES.API_KEY_SET_SUCCESS);
-}));
-
-// Verify authentication (alias)
-auth.get('/auth/verify', asyncHandler(async (c) => {
-  const sessionToken = c.req.header('X-Session-Token');
-  const userApiKey = c.req.header('X-User-API-Key');
-  const jwtSecret = c.env.JWT_SECRET || c.env.OPENROUTER_API_KEY || 'default-secret-key';
-
-  const status = await getAuthStatus(sessionToken, userApiKey, jwtSecret);
-  return successResponse(c, status);
+    api_key_set: true
+  }, ResponseMessage.API_KEY_SET_SUCCESS);
 }));
 
 export default auth;

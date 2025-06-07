@@ -1,8 +1,8 @@
-import { ChatMessage, ChatCompletionResponse, Env } from '../types';
+import { ChatCompletionResponse, ChatMessage } from '../types';
 import { contextManager } from './context';
 import {
-  estimateTokenCount,
   buildMessagesWithSummary,
+  estimateTokenCount,
   processSummarization
 } from './summarization';
 
@@ -36,7 +36,6 @@ export interface ChatRequestParams {
 
 export interface ChatProcessingContext {
   userId: string;
-  sessionId: string;
   currentRole: string;
   apiKey: string;
   selectedModel: string;
@@ -262,7 +261,7 @@ export async function processChatMessage(
   context: ChatProcessingContext,
   params: ChatRequestParams
 ): Promise<ChatResponse> {
-  const { userId, sessionId, currentRole, apiKey, selectedModel, systemPrompt } = context;
+  const { userId, currentRole, apiKey, selectedModel, systemPrompt } = context;
   const { 
     message, 
     temperature = DEFAULT_TEMPERATURE, 

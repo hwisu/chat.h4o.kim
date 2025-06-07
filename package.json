@@ -5,9 +5,12 @@
   "main": "src/index.ts",
   "type": "module",
   "scripts": {
-    "build": "vite build",
+    "build": "npm run typecheck && vite build",
     "dev": "wrangler dev",
-    "deploy": "npm run build && wrangler deploy"
+    "deploy": "npm run build && wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "typecheck:watch": "tsc --noEmit --watch",
+    "lint": "npm run typecheck"
   },
   "keywords": [
     "cloudflare-workers",

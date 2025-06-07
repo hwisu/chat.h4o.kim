@@ -97,7 +97,7 @@ export interface ApiResponse<T = any> {
 }
 
 // 인증 관련
-export interface LoginRequest {
+export interface LoginRequest extends Record<string, unknown> {
   password: string;
 }
 
@@ -115,7 +115,7 @@ export interface AuthStatusData {
 }
 
 // API 키 관련
-export interface SetApiKeyRequest {
+export interface SetApiKeyRequest extends Record<string, unknown> {
   apiKey: string;
 }
 
@@ -133,21 +133,7 @@ export interface ModelInfo {
   selected?: boolean;
 }
 
-export interface ModelsResponseData {
-  models: ModelInfo[];
-  response?: string;
-  cached: boolean;
-  user_api_key: boolean;
-}
 
-export interface SetModelRequest {
-  model: string;
-}
-
-export interface SetModelResponseData {
-  response: string;
-  model: string;
-}
 
 // 역할 관련
 export interface RoleInfo {
@@ -159,23 +145,9 @@ export interface RoleInfo {
   selected?: boolean;
 }
 
-export interface RolesResponseData {
-  roles: RoleInfo[];
-}
 
-export interface SetRoleRequest {
-  role: string;
-}
-
-export interface SetRoleResponseData {
-  role: RoleInfo;
-}
 
 // 채팅 관련
-export interface ChatRequest {
-  message: string;
-}
-
 export interface ChatResponseData {
   response: string;
   model: string;
@@ -197,9 +169,7 @@ export interface ContextData {
   };
 }
 
-export interface ContextStatsData {
-  stats: any;
-}
+
 
 export interface HelpResponseData {
   message: string;
