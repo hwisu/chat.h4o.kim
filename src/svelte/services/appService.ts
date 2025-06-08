@@ -157,7 +157,8 @@ export class AppService {
         selectedInfo: {
           name: selectedModel.name,
           provider: selectedModel.provider,
-          contextSize: selectedModel.context_length || DEFAULT_VALUES.CONTEXT_SIZE
+          contextSize: selectedModel.context_length || DEFAULT_VALUES.CONTEXT_SIZE,
+          supportsTools: selectedModel.supportsTools || false
         }
       });
     }

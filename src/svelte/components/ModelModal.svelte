@@ -1,8 +1,6 @@
 <script lang="ts">
-  import { modelsState } from '../stores/models.svelte';
-  import { updateModels } from '../stores/models.svelte';
   import { apiClient } from '../services/apiClient';
-  import { setError } from '../stores/ui.svelte';
+  import { modelsState, updateModels } from '../stores/models.svelte';
 
   // Svelte 5 props 시스템 사용
   let { onClose, onSelect } = $props();
@@ -145,7 +143,8 @@
             selectedInfo: {
               name: formatModelName(selectedModel),
               provider: selectedModel.provider,
-              contextSize: selectedModel.context_length || 128000
+              contextSize: selectedModel.context_length || 128000,
+              supportsTools: selectedModel.supportsTools
             }
           });
         }
@@ -243,6 +242,9 @@
                           {formatModelName(model)}
                           {#if model.id && model.id.includes(':free')}
                             <span class="model-free-tag">:free</span>
+                          {/if}
+                          {#if model.supportsTools}
+                            <span class="model-tools-tag" title="Supports function calling">t</span>
                           {/if}
                           {#if model.context_length}
                             <span class="model-context">({Math.round(model.context_length / 1000)}K)</span>
@@ -488,6 +490,19 @@
     padding: 2px 6px;
     border-radius: 4px;
     margin-left: 8px;
+  }
+
+  .model-tools-tag {
+    font-size: 10px;
+    font-weight: bold;
+    color: #00ff00;
+    background: rgba(0, 255, 0, 0.2);
+    border: 1px solid #00ff00;
+    border-radius: 3px;
+    padding: 2px 4px;
+    line-height: 1;
+    margin-left: 8px;
+    cursor: help;
   }
 
   .model-selected-indicator {

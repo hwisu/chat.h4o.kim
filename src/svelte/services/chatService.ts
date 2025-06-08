@@ -1,8 +1,9 @@
-import { apiClient } from './apiClient';
+import { contextState, updateContext } from '../stores/context.svelte';
+import type { ChatMessage } from '../stores/messages.svelte';
 import { addMessage } from '../stores/messages.svelte';
 import { setLoading } from '../stores/ui.svelte';
+import { apiClient } from './apiClient';
 import { appService } from './appService';
-import type { ChatMessage } from '../stores/messages.svelte';
 import { COMMANDS, MESSAGE_TYPES } from './constants';
 import { generateMessageId } from './utils';
 
@@ -61,6 +62,17 @@ export class ChatService {
       timestamp: new Date()
     };
     addMessage(message);
+
+    // 사용자 메시지의 토큰 수 추정 (단어 수 기반)
+    const wordCount = content.trim().split(/\s+/).length;
+    const estimatedTokens = Math.ceil(wordCount * 1.3); // 대략적인 토큰 추정 (단어당 1.3 토큰)
+    
+    // 컨텍스트 크기 업데이트
+    const newCurrentSize = contextState.currentSize + estimatedTokens;
+    updateContext({
+      currentSize: newCurrentSize,
+      percentage: contextState.maxSize > 0 ? (newCurrentSize / contextState.maxSize) * 100 : 0
+    });
   }
 
   /**
@@ -97,6 +109,22 @@ export class ChatService {
     };
 
     addMessage(message);
+
+    // 토큰 사용량이 있으면 컨텍스트 상태에 반영
+    if (tokenUsage?.total_tokens || tokenUsage?.prompt_tokens) {
+      // 현재 컨텍스트 크기에 새로운 토큰 사용량 추가
+      const newTokens = tokenUsage.total_tokens || (tokenUsage.prompt_tokens + (tokenUsage.completion_tokens || 0));
+      const newCurrentSize = contextState.currentSize + newTokens;
+      
+      // 컨텍스트 상태 업데이트
+      updateContext({
+        currentSize: newCurrentSize,
+        percentage: contextState.maxSize > 0 ? (newCurrentSize / contextState.maxSize) * 100 : 0,
+        lastTokenUsage: tokenUsage
+      });
+
+      console.log(`📊 Context updated: ${newCurrentSize} tokens (${Math.round((newCurrentSize / contextState.maxSize) * 100)}%)`);
+    }
   }
 
   /**

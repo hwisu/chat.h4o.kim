@@ -1,3 +1,4 @@
+import { supportsToolCalling as checkModelToolSupport } from '../routes/models';
 import { ChatCompletionResponse, ChatMessage } from '../types';
 import { contextManager } from './context';
 import {
@@ -5,6 +6,7 @@ import {
   estimateTokenCount,
   processSummarization
 } from './summarization';
+import { AVAILABLE_TOOLS } from './tools';
 
 // Constants
 const DEFAULT_TEMPERATURE = 0.7;
@@ -40,6 +42,7 @@ export interface ChatProcessingContext {
   apiKey: string;
   selectedModel: string;
   systemPrompt: string;
+  env?: any; // Cloudflare Workers 환경 객체
 }
 
 export interface ChatResponse {
@@ -132,8 +135,10 @@ export async function processContextAndSummary(
   };
 }
 
+
+
 /**
- * API 요청 본문 준비
+ * API 요청 본문 준비 (Function Calling 지원 포함)
  */
 export function prepareChatRequest(
   messages: any[],
@@ -142,7 +147,8 @@ export function prepareChatRequest(
   max_tokens: number = DEFAULT_MAX_TOKENS,
   top_p: number = DEFAULT_TOP_P,
   frequency_penalty: number = DEFAULT_FREQUENCY_PENALTY,
-  presence_penalty: number = DEFAULT_PRESENCE_PENALTY
+  presence_penalty: number = DEFAULT_PRESENCE_PENALTY,
+  includeTools: boolean = false
 ): any {
   if (!messages || !Array.isArray(messages) || messages.length === 0) {
     throw new ChatError('Messages array is required and cannot be empty', 'EMPTY_MESSAGES');
@@ -152,7 +158,7 @@ export function prepareChatRequest(
     throw new ChatError('Model selection is required', 'MISSING_MODEL');
   }
 
-  return {
+  const baseRequest = {
     model: selectedModel,
     messages: messages,
     max_tokens: max_tokens,
@@ -162,6 +168,17 @@ export function prepareChatRequest(
     presence_penalty: presence_penalty,
     stream: false
   };
+
+  // Function Calling을 지원하는 모델인 경우 tools 추가
+  if (includeTools && checkModelToolSupport(selectedModel)) {
+    return {
+      ...baseRequest,
+      tools: AVAILABLE_TOOLS,
+      tool_choice: 'auto'
+    };
+  }
+
+  return baseRequest;
 }
 
 /**
@@ -275,8 +292,6 @@ export async function processChatMessage(
     throw new ChatError('Message content is required', 'EMPTY_MESSAGE');
   }
 
-
-
   try {
     // 사용자 메시지를 컨텍스트에 추가
     await contextManager.addMessage(userId, 'user', message);
@@ -303,7 +318,10 @@ export async function processChatMessage(
       systemPrompt
     );
 
-    // API 요청 준비
+    // Function Calling을 지원하는 모델인지 확인
+    const shouldUseTools = checkModelToolSupport(selectedModel);
+
+    // API 요청 준비 (도구 포함 여부 결정)
     const chatRequestBody = prepareChatRequest(
       messages,
       selectedModel,
@@ -311,36 +329,190 @@ export async function processChatMessage(
       max_tokens,
       top_p,
       frequency_penalty,
-      presence_penalty
+      presence_penalty,
+      shouldUseTools
     );
 
-    // API 호출
-    const chatResponse = await callOpenRouterAPI(apiKey, chatRequestBody);
-    const chatData = await validateAndParseResponse(chatResponse, selectedModel);
+    // Function Calling 루프 처리
+    let conversationMessages = [...messages];
+    let finalAssistantResponse = '';
+    let finalChatData: ChatCompletionResponse | null = null;
+    let maxToolCalls = 5; // 무한 루프 방지
+    let toolExecutionLog: Array<{
+      toolName: string;
+      status: 'success' | 'error';
+      timestamp: string;
+      args?: any;
+      result?: any;
+      error?: string;
+    }> = [];
 
-    const assistantResponse = chatData.choices[0].message.content || '';
+    while (maxToolCalls > 0) {
+      // API 호출
+      const chatResponse = await callOpenRouterAPI(apiKey, {
+        ...chatRequestBody,
+        messages: conversationMessages
+      });
+      const chatData = await validateAndParseResponse(chatResponse, selectedModel);
+      finalChatData = chatData;
+
+      const assistantMessage = chatData.choices[0].message;
+      finalAssistantResponse = assistantMessage.content || '';
+
+      // 어시스턴트 메시지를 대화에 추가
+      conversationMessages.push({
+        role: 'assistant',
+        content: finalAssistantResponse,
+        tool_calls: assistantMessage.tool_calls
+      });
+
+      // Tool calls가 있는지 확인
+      if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+        console.log(`🔧 Processing ${assistantMessage.tool_calls.length} tool calls...`);
+
+        // 각 tool call 실행 - tools.ts에서 import된 executeTool 사용
+        for (const toolCall of assistantMessage.tool_calls) {
+          const executionStart = new Date().toISOString();
+          let logEntry = {
+            toolName: toolCall.function.name,
+            status: 'error' as 'success' | 'error',
+            timestamp: executionStart,
+            args: undefined as any,
+            result: undefined as any,
+            error: undefined as string | undefined
+          };
+
+          try {
+            const toolName = toolCall.function.name;
+            
+            // toolCall.function.arguments가 undefined이거나 빈 문자열인 경우 처리
+            let toolArgs = {};
+            if (toolCall.function.arguments && toolCall.function.arguments.trim()) {
+              try {
+                toolArgs = JSON.parse(toolCall.function.arguments);
+              } catch (parseError) {
+                throw new Error(`Invalid JSON in tool arguments: ${toolCall.function.arguments} - ${parseError instanceof Error ? parseError.message : 'Unknown parse error'}`);
+              }
+            } else {
+              console.warn(`⚠️ Tool ${toolName} called with empty or undefined arguments, using empty object`);
+            }
+            
+            logEntry.args = toolArgs;
+            console.log(`🔧 Executing tool: ${toolName} with args:`, toolArgs);
+            
+            // tools.ts 모듈에서 직접 import된 함수들 사용
+            let toolResult;
+            if (toolName === 'search_web') {
+              const { searchWeb } = await import('./tools');
+              toolResult = await searchWeb(
+                (toolArgs as any).query || '', 
+                (toolArgs as any).max_results || 5, 
+                context.env
+              );
+            } else if (toolName === 'search_and_summarize') {
+              const { searchAndSummarize } = await import('./tools');
+              toolResult = await searchAndSummarize(
+                (toolArgs as any).query || '', 
+                context.env
+              );
+            } else if (toolName === 'get_current_time') {
+              const { getCurrentTime } = await import('./tools');
+              toolResult = getCurrentTime((toolArgs as any).timezone);
+            } else {
+              toolResult = {
+                success: false,
+                error: `Unknown tool: ${toolName}`
+              };
+            }
+            
+            logEntry.result = toolResult;
+            if (toolResult.success) {
+              logEntry.status = 'success';
+              console.log(`✅ Tool ${toolName} executed successfully:`, {
+                resultCount: (toolResult.data as any)?.results?.length || 'N/A',
+                timestamp: (toolResult.data as any)?.timestamp || 'N/A'
+              });
+            } else {
+              console.warn(`⚠️ Tool ${toolName} returned error:`, toolResult.error);
+              logEntry.error = toolResult.error;
+            }
+            
+            // Tool 결과를 대화에 추가
+            conversationMessages.push({
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              name: toolName,
+              content: JSON.stringify({
+                success: toolResult.success,
+                data: toolResult.data,
+                error: toolResult.error
+              })
+            });
+
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            logEntry.error = errorMessage;
+            console.error(`❌ Tool execution failed:`, error);
+            
+            // 에러 결과를 대화에 추가
+            conversationMessages.push({
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              name: toolCall.function.name,
+              content: JSON.stringify({
+                success: false,
+                error: `Tool execution failed: ${errorMessage}`
+              })
+            });
+          } finally {
+            toolExecutionLog.push(logEntry);
+          }
+        }
+
+        maxToolCalls--;
+        // 다음 반복에서 tool 결과를 포함한 메시지로 다시 API 호출
+        continue;
+      } else {
+        // Tool calls가 없으면 완료
+        break;
+      }
+    }
+
+    // Tool 실행 요약 로그
+    if (toolExecutionLog.length > 0) {
+      console.log(`📊 Tool Execution Summary:`, {
+        totalExecutions: toolExecutionLog.length,
+        successful: toolExecutionLog.filter(log => log.status === 'success').length,
+        failed: toolExecutionLog.filter(log => log.status === 'error').length,
+        tools: toolExecutionLog.map(log => ({ 
+          name: log.toolName, 
+          status: log.status,
+          timestamp: log.timestamp 
+        }))
+      });
+    }
 
     // 어시스턴트 응답을 컨텍스트에 추가
-    await contextManager.addMessage(userId, 'assistant', assistantResponse);
+    await contextManager.addMessage(userId, 'assistant', finalAssistantResponse);
 
     // 컨텍스트 업데이트 (요약, 토큰 사용량 등)
     await contextManager.updateContext(userId, {
       summary: contextResult.currentSummary,
       conversationHistory: [...contextResult.finalMessages,
         { role: 'user', content: message, timestamp: Date.now() },
-        { role: 'assistant', content: assistantResponse, timestamp: Date.now() }
+        { role: 'assistant', content: finalAssistantResponse, timestamp: Date.now() }
       ],
-      tokenUsage: chatData.usage?.total_tokens || 0
+      tokenUsage: finalChatData?.usage?.total_tokens || 0
     });
 
     // 성공 응답 구성
     return {
-      response: assistantResponse,
+      response: finalAssistantResponse,
       model: selectedModel,
-      usage: chatData.usage,
+      usage: finalChatData?.usage,
       role: currentRole,
       currentModel: selectedModel,
-      tokensUsed: chatData.usage?.total_tokens,
+      tokensUsed: finalChatData?.usage?.total_tokens,
       messageCount: messages.length
     };
 

@@ -2,10 +2,10 @@ import { Hono } from 'hono';
 import { authRequired, getUserIdFromContext } from '../middleware/auth';
 import { getRoleSystemPrompt } from '../roles';
 import {
-  ChatProcessingContext,
-  ChatRequestParams,
-  getHelpMessage,
-  processChatMessage
+    ChatProcessingContext,
+    ChatRequestParams,
+    getHelpMessage,
+    processChatMessage
 } from '../services/chat';
 import type { Env } from '../types';
 import { CHAT_CONFIG, ErrorStatus, RESPONSE_MESSAGES } from './constants';
@@ -107,7 +107,8 @@ chat.post('/chat', authRequired, asyncHandler(async (c) => {
     currentRole,
     apiKey,
     selectedModel,
-    systemPrompt
+    systemPrompt,
+    env: c.env
   };
 
   // Process chat message

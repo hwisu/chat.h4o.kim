@@ -172,6 +172,12 @@
         </div>
       {/if}
 
+      <!-- 에러 메시지 -->
+      {#if error}
+        <div class="auth-error">
+          {error}
+        </div>
+      {/if}
 
     </div>
   </div>
