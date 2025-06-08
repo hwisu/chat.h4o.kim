@@ -19,6 +19,7 @@ interface JWTPayload {
   exp: number;
   nonce: string;
   iss: string;
+  sub: string;
 }
 
 export class AuthError extends Error {
@@ -38,7 +39,7 @@ function generateSecureNonce(): string {
 }
 
 /**
- * Authenticate user with password
+ * Authenticate user with password - Enhanced security
  */
 export async function authenticateUser(password: string, accessPassword: string, jwtSecret: string): Promise<AuthResult> {
   try {
@@ -46,20 +47,37 @@ export async function authenticateUser(password: string, accessPassword: string,
       return { success: false, message: 'Password is required' };
     }
 
+    // Enhanced validation
+    if (!jwtSecret || jwtSecret.length < 32) {
+      console.error('Invalid JWT secret configuration');
+      return { success: false, message: 'Server configuration error' };
+    }
+
+    if (!accessPassword) {
+      console.error('ACCESS_PASSWORD not configured');
+      return { success: false, message: 'Server configuration error' };
+    }
+
     if (password !== accessPassword) {
       return { success: false, message: 'Invalid password' };
     }
 
     const nonce = generateSecureNonce();
-    const expiresIn = AuthConfig.JWT_EXPIRY_HOURS * 60 * 60; // in seconds
+    const expiresIn = AuthConfig.JWT_EXPIRY_HOURS * 60 * 60;
     
     const payload = {
       pwd: password,
       nonce,
-      iss: AuthConfig.JWT_ISSUER
+      iss: AuthConfig.JWT_ISSUER,
+      // Add additional claims for enhanced security
+      iat: Math.floor(Date.now() / 1000),
+      sub: 'user-session'
     };
 
-    const token = jwt.sign(payload, jwtSecret, { expiresIn });
+    const token = jwt.sign(payload, jwtSecret, { 
+      expiresIn,
+      algorithm: AuthConfig.JWT_ALGORITHM // Explicitly specify algorithm
+    });
 
     return {
       success: true,
@@ -73,23 +91,29 @@ export async function authenticateUser(password: string, accessPassword: string,
 }
 
 /**
- * Verify JWT token
+ * Enhanced token verification with additional security checks
  */
 export async function verifyToken(token: string, jwtSecret: string): Promise<boolean> {
   try {
-    if (!token?.trim()) return false;
+    if (!token?.trim() || !jwtSecret) return false;
 
-    const decoded = jwt.verify(token, jwtSecret) as JWTPayload;
+    const decoded = jwt.verify(token, jwtSecret, {
+      algorithms: [AuthConfig.JWT_ALGORITHM], // Restrict to specific algorithm
+      issuer: AuthConfig.JWT_ISSUER,
+      maxAge: AuthConfig.JWT_EXPIRY_HOURS * 60 * 60 // Double-check expiry
+    }) as JWTPayload;
     
-    // Verify token structure and issuer
+    // Enhanced validation
     return Boolean(
       decoded.pwd &&
       decoded.iat &&
       decoded.exp &&
       decoded.nonce &&
-      decoded.iss === AuthConfig.JWT_ISSUER
+      decoded.iss === AuthConfig.JWT_ISSUER &&
+      decoded.sub === 'user-session'
     );
   } catch (error) {
+    console.error('Token verification failed:', error);
     return false;
   }
 }

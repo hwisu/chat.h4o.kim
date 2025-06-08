@@ -3,16 +3,17 @@
  */
 
 import { API_ENDPOINTS, STORAGE_KEYS } from './constants';
+import { secureStorage } from './secureStorage';
 import type {
-  ApiResponse,
-  AuthInfo,
-  AuthStatusData,
-  ChatResponseData,
-  LoginResponseData,
-  ModelInfo,
-  RoleInfo,
-  ServiceApiResponse,
-  SetApiKeyResponseData
+    ApiResponse,
+    AuthInfo,
+    AuthStatusData,
+    ChatResponseData,
+    LoginResponseData,
+    ModelInfo,
+    RoleInfo,
+    ServiceApiResponse,
+    SetApiKeyResponseData
 } from './types';
 import { createApiResponse, extractErrorMessage } from './utils';
 
@@ -23,7 +24,11 @@ export class ApiClient {
   };
 
   constructor() {
-    this.restoreAuth();
+    this.initializeAuth();
+  }
+
+  private async initializeAuth(): Promise<void> {
+    await this.restoreAuth();
   }
 
   /**
@@ -189,7 +194,7 @@ export class ApiClient {
       
       if (serverResponse.success) {
         this.authInfo.userApiKey = apiKey;
-        localStorage.setItem(STORAGE_KEYS.USER_API_KEY, apiKey);
+        await secureStorage.setItem(STORAGE_KEYS.USER_API_KEY, apiKey);
         
         return createApiResponse<{ success: boolean }>(true, { success: true });
       } else {
@@ -299,11 +304,9 @@ export class ApiClient {
   /**
    * 로컬 스토리지에서 인증 정보 복원
    */
-  restoreAuth(): void {
+  async restoreAuth(): Promise<void> {
     const sessionToken = sessionStorage.getItem(STORAGE_KEYS.SESSION_TOKEN);
-    const userApiKey = localStorage.getItem(STORAGE_KEYS.USER_API_KEY);
-    
-
+    const userApiKey = await secureStorage.getItem(STORAGE_KEYS.USER_API_KEY);
     
     this.authInfo.sessionToken = sessionToken;
     this.authInfo.userApiKey = userApiKey;
@@ -316,7 +319,7 @@ export class ApiClient {
     this.authInfo.sessionToken = null;
     this.authInfo.userApiKey = null;
     sessionStorage.removeItem(STORAGE_KEYS.SESSION_TOKEN);
-    localStorage.removeItem(STORAGE_KEYS.USER_API_KEY);
+    secureStorage.removeItem(STORAGE_KEYS.USER_API_KEY);
   }
 
   /**

@@ -1,5 +1,7 @@
 import { Hono } from 'hono';
 import { authRequired } from '../middleware/auth';
+import { extractUserIdFromJWT } from '../services/auth';
+import { cryptoService } from '../services/crypto';
 import { Env, ModelInfo, OpenRouterModel, OpenRouterModelsResponse } from '../types';
 import { API_CONFIG, ErrorStatus, MODEL_CONFIG, RESPONSE_MESSAGES } from './constants';
 import { asyncHandler, errorResponse, fetchWithTimeout, getCookieValue, parseJsonBody, setCookie, successResponse } from './utils';
@@ -179,15 +181,32 @@ export function filterToolsSupportModels(models: OpenRouterModel[]): OpenRouterM
   });
 }
 
-// Get API key (user key takes priority)
-export function getApiKey(c: any): string {
+// Get API key (user key takes priority, including encrypted keys)
+export async function getApiKey(c: any): Promise<string> {
   const userApiKey = c.req.header('X-User-API-Key');
+  const sessionToken = c.req.header('X-Session-Token');
   const serverApiKey = c.env.OPENROUTER_API_KEY;
 
+  // First try direct user API key
   if (userApiKey?.startsWith(MODEL_CONFIG.API_KEY_PREFIX)) {
     return userApiKey;
   }
 
+  // Try encrypted user API key if session token is available
+  if (sessionToken) {
+    const jwtSecret = c.env.JWT_SECRET;
+    if (jwtSecret) {
+      const userId = await extractUserIdFromJWT(sessionToken, jwtSecret);
+      if (userId) {
+        const decryptedKey = await cryptoService.getDecryptedApiKey(c.env, userId);
+        if (decryptedKey?.startsWith(MODEL_CONFIG.API_KEY_PREFIX)) {
+          return decryptedKey;
+        }
+      }
+    }
+  }
+
+  // Fall back to server API key
   if (serverApiKey?.trim()) {
     return serverApiKey;
   }
@@ -275,7 +294,7 @@ export async function getSelectedModel(c: any, requestedModel?: string, skipLog?
     return cookieModel;
   }
 
-  const apiKey = getApiKey(c);
+  const apiKey = await getApiKey(c);
   return await autoSelectModel(c, apiKey, skipLog);
 }
 
@@ -322,7 +341,7 @@ async function fetchModels(apiKey: string, hasUserApiKey: boolean): Promise<Open
 // Get available models
 models.get('/models', authRequired, asyncHandler(async (c) => {
   try {
-    const apiKey = getApiKey(c);
+    const apiKey = await getApiKey(c);
     const hasUserApiKey = !!c.req.header('X-User-API-Key');
     const toolsOnly = c.req.query('tools_only') === 'true'; // 툴 지원 모델만 필터링
     

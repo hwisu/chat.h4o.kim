@@ -75,7 +75,8 @@ export class ContextManager {
       }
     }
 
-    if (cleanedCount > 0) {
+    // 🔒 보안 개선: 운영 환경에서는 개인정보 로깅 방지
+    if (cleanedCount > 0 && typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production') {
       console.log(`🧹 Cleaned up ${cleanedCount} expired contexts`);
     }
   }
