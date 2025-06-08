@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
-import { Env } from '../types';
-import { contextManager } from '../services/context';
 import { authRequired, getUserIdFromContext } from '../middleware/auth';
+import { contextManager } from '../services/context';
+import { Env } from '../types';
 import { RESPONSE_MESSAGES } from './constants';
-import { successResponse, asyncHandler } from './utils';
+import { asyncHandler, successResponse } from './utils';
 
 const context = new Hono<{ Bindings: Env }>();
 
@@ -19,7 +19,10 @@ context.get('/context', authRequired, asyncHandler(async (c) => {
       summary: contextData.summary,
       tokenUsage: contextData.tokenUsage,
       lastUpdated: contextData.updatedAt
-    }
+    },
+    usage: `${contextData.tokenUsage} tokens`,
+    maxSize: contextData.maxTokens,
+    currentSize: contextData.tokenUsage
   });
 }));
 

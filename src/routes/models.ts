@@ -10,7 +10,7 @@ const models = new Hono<{ Bindings: Env }>();
 interface ModelCache {
   data: ModelInfo[];
   timestamp: number;
-  type: 'user' | 'server';
+  type: string; // 'user' | 'server' | 'user_tools' | 'server_tools' | etc.
 }
 
 let modelsCache: ModelCache | null = null;
@@ -30,12 +30,18 @@ function transformToModelInfo(openRouterModel: OpenRouterModel, isSelected = fal
     .replace(/\s*\(free\)\s*$/i, '')
     .replace(/:free\s*$/i, '');
 
+  // Check if model supports tools
+  const supportsTools = openRouterModel.supported_parameters && 
+                       Array.isArray(openRouterModel.supported_parameters) &&
+                       openRouterModel.supported_parameters.includes('tools');
+
   return {
     id: openRouterModel.id,
     name: cleanName,
     provider,
     context_length: openRouterModel.context_length,
-    selected: isSelected
+    selected: isSelected,
+    supportsTools
   };
 }
 
@@ -147,6 +153,32 @@ export function filterFreeModels(models: OpenRouterModel[]): OpenRouterModel[] {
     });
 }
 
+// Filter models with function calling support
+export function filterToolsSupportModels(models: OpenRouterModel[]): OpenRouterModel[] {
+  return models.filter((model: OpenRouterModel) => {
+    // Check if model supports tools in supported_parameters
+    const supportsTools = model.supported_parameters && 
+                         Array.isArray(model.supported_parameters) &&
+                         model.supported_parameters.includes('tools');
+    
+    if (!supportsTools) return false;
+    
+    // Also filter by quality criteria (same as free models)
+    if (model.id.endsWith(':free')) {
+      // For free models, apply quality filters
+      if (model.id.toLowerCase().match(/mini|micro|small/)) return false;
+      
+      const sizeMatch = model.id.toLowerCase().match(/(\d+(?:\.\d+)?)b/);
+      if (sizeMatch) {
+        const size = parseFloat(sizeMatch[1]);
+        return size >= MODEL_CONFIG.MIN_FREE_MODEL_SIZE_B;
+      }
+    }
+    
+    return true;
+  });
+}
+
 // Get API key (user key takes priority)
 export function getApiKey(c: any): string {
   const userApiKey = c.req.header('X-User-API-Key');
@@ -166,6 +198,21 @@ export function getApiKey(c: any): string {
 // Get selected model from cookie
 export function getSelectedModelFromCookie(c: any): string | undefined {
   return getCookieValue(c, 'selected_model');
+}
+
+/**
+ * 모델이 Function Calling을 지원하는지 확인 (캐시된 정보 기반)
+ */
+export function supportsToolCalling(modelId: string): boolean {
+  // 캐시된 모델 정보에서 확인
+  if (modelsCache && modelsCache.data) {
+    const model = modelsCache.data.find(m => m.id === modelId);
+    if (model) {
+      console.log(`🔧 Model ${modelId} tool support: ${model.supportsTools ? '✅ YES' : '❌ NO'} (from cache)`);
+      return model.supportsTools || false;
+    }
+  }
+  return false;
 }
 
 // Auto-select best available model
@@ -208,8 +255,8 @@ export async function autoSelectModel(c: any, apiKey: string, skipLog?: boolean)
     return selectedModel;
   } catch (error) {
     console.error('❌ Auto-selection failed:', error);
-    // Fallback to a known free model
-    const fallbackModel = 'meta-llama/llama-3.3-70b-instruct:free';
+    // Fallback to a known working free model (prefer models with better tool support)
+    const fallbackModel = 'google/gemini-flash-1.5:free';
     if (!skipLog) {
       console.log(`🔄 Using fallback model: ${fallbackModel}`);
     }
@@ -277,15 +324,17 @@ models.get('/models', authRequired, asyncHandler(async (c) => {
   try {
     const apiKey = getApiKey(c);
     const hasUserApiKey = !!c.req.header('X-User-API-Key');
+    const toolsOnly = c.req.query('tools_only') === 'true'; // 툴 지원 모델만 필터링
     
     // Check cache first
+    const cacheKey = `${hasUserApiKey ? 'user' : 'server'}_${toolsOnly ? 'tools' : 'all'}`;
     if (modelsCache && Date.now() - modelsCache.timestamp < MODEL_CONFIG.MODEL_CACHE_TTL_MS) {
-      const cacheType = hasUserApiKey ? 'user' : 'server';
-      if (modelsCache.type === cacheType) {
+      if (modelsCache.type === cacheKey) {
         return successResponse(c, {
           models: modelsCache.data,
           cached: true,
-          cache_age_ms: Date.now() - modelsCache.timestamp
+          cache_age_ms: Date.now() - modelsCache.timestamp,
+          tools_only: toolsOnly
         });
       }
     }
@@ -295,8 +344,14 @@ models.get('/models', authRequired, asyncHandler(async (c) => {
     const selectedModelId = getSelectedModelFromCookie(c) || undefined;
     
     let filteredModels = openRouterModels;
+    
+    // Apply filters
     if (!hasUserApiKey) {
       filteredModels = filterFreeModels(openRouterModels);
+    }
+    
+    if (toolsOnly) {
+      filteredModels = filterToolsSupportModels(filteredModels);
     }
 
     const transformedModels = transformModelsArray(filteredModels, selectedModelId);
@@ -305,14 +360,16 @@ models.get('/models', authRequired, asyncHandler(async (c) => {
     modelsCache = {
       data: transformedModels,
       timestamp: Date.now(),
-      type: hasUserApiKey ? 'user' : 'server'
+      type: cacheKey
     };
 
     return successResponse(c, {
       models: transformedModels,
       cached: false,
       total_available: openRouterModels.length,
-      filtered_count: filteredModels.length
+      filtered_count: filteredModels.length,
+      tools_only: toolsOnly,
+      tools_supported_count: filterToolsSupportModels(openRouterModels).length
     });
 
   } catch (error) {

@@ -66,3 +66,39 @@ chat.h4o.kim
 2. 상태 관리를 Svelte 스토어로 이전
 3. TypeScript 적용
 4. 테스트 추가
+
+## 환경 설정
+
+### 필수 환경변수
+
+```bash
+# OpenRouter API 키 (필수)
+OPENROUTER_API_KEY=your_openrouter_api_key
+
+# 웹 검색 기능을 위한 Brave Search API 키 (선택사항)
+BRAVE_SEARCH_API_KEY=your_brave_search_api_key
+```
+
+### Brave Search API 설정 (웹 검색 기능)
+
+웹 검색 기능을 사용하려면 Brave Search API 키가 필요합니다.
+
+1. **무료 API 키 발급**: https://api.search.brave.com 에서 회원가입
+2. **무료 제한**: 월 2,000 쿼리, 1 QPS
+3. **환경변수 설정**: `BRAVE_SEARCH_API_KEY=tvly-your_api_key`
+
+설정하지 않으면 DuckDuckGo 폴백이 사용됩니다 (제한적).
+
+## 개발 서버 실행
+
+```bash
+npm install
+npm run dev
+```
+
+## 빌드 및 배포
+
+```bash
+npm run build
+npm run deploy
+```

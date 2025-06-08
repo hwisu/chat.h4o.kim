@@ -4,6 +4,7 @@ export interface ModelInfo {
   name: string;
   provider: string;
   contextSize: number;
+  supportsTools?: boolean;
 }
 
 export interface ModelState {

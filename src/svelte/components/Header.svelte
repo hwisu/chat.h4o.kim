@@ -1,8 +1,8 @@
 <script lang="ts">
   import { authState } from '../stores/auth.svelte';
-import { modelsState } from '../stores/models.svelte';
-import { rolesState } from '../stores/roles.svelte';
-import { contextState } from '../stores/context.svelte';
+  import { contextState } from '../stores/context.svelte';
+  import { modelsState } from '../stores/models.svelte';
+  import { rolesState } from '../stores/roles.svelte';
 
   // Svelte 5 props 시스템 사용
   interface Props {
@@ -55,12 +55,19 @@ import { contextState } from '../stores/context.svelte';
       return 'whoami';
     }
     
-    const contextSize = Math.round(modelsState.selectedInfo.contextSize / 1000);
-    if (contextState.currentSize > 0 && modelsState.selectedInfo.contextSize > 0) {
-      const percentage = (contextState.currentSize / modelsState.selectedInfo.contextSize) * 100;
-      return `${contextSize}K (${Math.round(percentage)}%)`;
+    const modelContextSize = modelsState.selectedInfo.contextSize;
+    const currentTokens = contextState.currentSize;
+    const contextSizeInK = Math.round(modelContextSize / 1000);
+    
+    if (currentTokens > 0 && modelContextSize > 0) {
+      const percentage = (currentTokens / modelContextSize) * 100;
+      const currentInK = currentTokens >= 1000 ? 
+        `${(currentTokens / 1000).toFixed(1)}K` : 
+        currentTokens.toString();
+      
+      return `${currentInK}/${contextSizeInK}K (${Math.round(percentage)}%)`;
     }
-    return `${contextSize}K (0%)`;
+    return `0/${contextSizeInK}K (0%)`;
   }
 </script>
 
@@ -72,7 +79,10 @@ import { contextState } from '../stores/context.svelte';
       onclick={onModelClick}
       aria-label="Select model"
     >
-      {modelsState.selectedInfo.name}
+      <span class="model-name">{modelsState.selectedInfo.name}</span>
+      {#if modelsState.selectedInfo.supportsTools}
+        <span class="tools-indicator" title="Supports Function Calling / Tools">t</span>
+      {/if}
     </button>
   </div>
   
@@ -150,6 +160,30 @@ import { contextState } from '../stores/context.svelte';
     height: 40px;
     display: flex;
     align-items: center;
+    gap: 6px;
+  }
+
+  .model-name {
+    display: flex;
+    align-items: center;
+  }
+
+  .tools-indicator {
+    font-size: 10px;
+    font-weight: bold;
+    color: #00ff00;
+    background: rgba(0, 255, 0, 0.2);
+    border: 1px solid #00ff00;
+    border-radius: 3px;
+    padding: 2px 4px;
+    line-height: 1;
+    opacity: 0.9;
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.8; }
+    50% { opacity: 1; }
   }
 
   .model-title {

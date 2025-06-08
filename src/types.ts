@@ -1,4 +1,5 @@
 export interface Env {
+  BRAVE_SEARCH_API_KEY: string;
   OPENROUTER_API_KEY: string;
   ACCESS_PASSWORD?: string;
   JWT_SECRET?: string;
@@ -131,6 +132,7 @@ export interface ModelInfo {
   provider: string;
   context_length?: number;
   selected?: boolean;
+  supportsTools?: boolean;
 }
 
 
