@@ -96,7 +96,7 @@ chat.post('/chat', authRequired, asyncHandler(async (c) => {
   };
 
   // Get API key, model, and role information
-  const apiKey = getApiKey(c);
+  const apiKey = await getApiKey(c);
   const selectedModel = await getSelectedModel(c, params.model, true);
       const currentRole = getUserRole(userId);
   const systemPrompt = getRoleSystemPrompt(currentRole);

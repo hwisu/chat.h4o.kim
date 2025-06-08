@@ -135,8 +135,6 @@ export async function processContextAndSummary(
   };
 }
 
-
-
 /**
  * API 요청 본문 준비 (Function Calling 지원 포함)
  */
@@ -359,10 +357,13 @@ export async function processChatMessage(
       const assistantMessage = chatData.choices[0].message;
       finalAssistantResponse = assistantMessage.content || '';
 
+      // 🔧 도구 호출 후 빈 응답 방지: 최소한의 콘텐츠 보장
+      const contentForConversation = finalAssistantResponse || '🔧 도구를 실행 중입니다...';
+
       // 어시스턴트 메시지를 대화에 추가
       conversationMessages.push({
         role: 'assistant',
-        content: finalAssistantResponse,
+        content: contentForConversation,
         tool_calls: assistantMessage.tool_calls
       });
 
@@ -391,10 +392,136 @@ export async function processChatMessage(
               try {
                 toolArgs = JSON.parse(toolCall.function.arguments);
               } catch (parseError) {
-                throw new Error(`Invalid JSON in tool arguments: ${toolCall.function.arguments} - ${parseError instanceof Error ? parseError.message : 'Unknown parse error'}`);
+                // 🔧 JSON 파싱 실패 시 더 강력한 한국어 처리
+                console.warn(`⚠️ JSON parsing failed for tool ${toolName}:`, {
+                  rawArguments: toolCall.function.arguments,
+                  parseError: parseError instanceof Error ? parseError.message : 'Unknown parse error'
+                });
+                
+                                 // 1단계: 정규식으로 JSON 구조 복구 시도
+                 let recoveredArgs: any = null;
+                 try {
+                   // "query": "한국어 내용" 패턴 찾기
+                   const queryMatch = toolCall.function.arguments.match(/"query"?\s*:\s*"([^"]+)"/);
+                   if (queryMatch) {
+                     recoveredArgs = { query: queryMatch[1] };
+                     console.log(`✓ Extracted query from malformed JSON: "${queryMatch[1]}"`);
+                   } else {
+                     // 2단계: query: 내용 (따옴표 없이) 패턴 찾기
+                     const queryMatch2 = toolCall.function.arguments.match(/query\s*:\s*([^,}]+)/);
+                     if (queryMatch2) {
+                       const query = queryMatch2[1].replace(/["\[\]]/g, '').trim();
+                       recoveredArgs = { query: query };
+                       console.log(`✓ Extracted unquoted query: "${query}"`);
+                     }
+                   }
+                   
+                   // max_results 파라미터도 복구 시도
+                   if (recoveredArgs) {
+                     const maxResultsMatch = toolCall.function.arguments.match(/"?max_results"?\s*:\s*(\d+)/);
+                     if (maxResultsMatch) {
+                       recoveredArgs.max_results = parseInt(maxResultsMatch[1]);
+                     }
+                   }
+                } catch (regexError) {
+                  console.warn('Regex recovery also failed:', regexError);
+                }
+                
+                // 3단계: 사용자 메시지에서 직접 쿼리 추출 (최후의 수단)
+                if (!recoveredArgs) {
+                  const lastUserMessage = conversationMessages
+                    .slice()
+                    .reverse()
+                    .find(msg => msg.role === 'user');
+                  
+                  if (lastUserMessage && lastUserMessage.content) {
+                    let userQuery = lastUserMessage.content.trim();
+                    
+                    // "rxjs 문서"와 같은 특정 키워드 추출 개선
+                    const keywordPatterns = [
+                      /최신\s+(\w+)\s+문서/g,  // "최신 rxjs 문서"
+                      /(\w+)\s+(?:문서|버전|차이|업데이트)/g,  // "rxjs 버전"
+                      /(\w+)\s+vs\s+(\w+)/g,  // "A vs B"
+                    ];
+                    
+                    let extractedQuery = userQuery;
+                    for (const pattern of keywordPatterns) {
+                      const matches = userQuery.match(pattern);
+                      if (matches && matches.length > 0) {
+                        extractedQuery = matches.join(' ');
+                        break;
+                      }
+                    }
+                    
+                    // 영어 키워드는 그대로 유지하도록 개선
+                    if (userQuery.includes('rxjs')) {
+                      extractedQuery = userQuery.replace(/을|를|에서|의|과|와|차이|알려|줘|읽고|지난/g, ' ')
+                        .replace(/\s+/g, ' ')
+                        .trim();
+                    }
+                    
+                    recoveredArgs = { 
+                      query: extractedQuery.slice(0, 200), // 최대 200자
+                      max_results: 5 
+                    };
+                    console.log(`✓ Extracted query from user message: "${extractedQuery}"`);
+                  }
+                }
+                
+                if (recoveredArgs && recoveredArgs.query) {
+                  toolArgs = recoveredArgs;
+                } else {
+                  throw new Error(`Failed to extract valid arguments from: ${toolCall.function.arguments}`);
+                }
               }
             } else {
               console.warn(`⚠️ Tool ${toolName} called with empty or undefined arguments, using empty object`);
+            }
+            
+            // 🔧 Tool arguments 유효성 검증 및 기본값 설정
+            if (toolName === 'search_web') {
+              if (!toolArgs || typeof toolArgs !== 'object') {
+                toolArgs = {};
+              }
+              
+              // query 파라미터가 없는 경우 기본값 설정
+              if (!(toolArgs as any).query) {
+                console.warn(`⚠️ search_web called without query parameter, attempting to infer from context`);
+                // 사용자의 마지막 메시지에서 쿼리 추출 시도
+                const lastUserMessage = conversationMessages
+                  .slice()
+                  .reverse()
+                  .find(msg => msg.role === 'user');
+                
+                if (lastUserMessage && lastUserMessage.content) {
+                  (toolArgs as any).query = lastUserMessage.content.slice(0, 200); // 최대 200자
+                  console.log(`✓ Inferred query from user message: ${(toolArgs as any).query}`);
+                } else {
+                  (toolArgs as any).query = '검색 쿼리';
+                }
+              }
+              
+              // max_results 기본값 설정
+              if (!(toolArgs as any).max_results) {
+                (toolArgs as any).max_results = 5;
+              }
+            } else if (toolName === 'search_and_summarize') {
+              if (!toolArgs || typeof toolArgs !== 'object') {
+                toolArgs = {};
+              }
+              
+              if (!(toolArgs as any).query) {
+                const lastUserMessage = conversationMessages
+                  .slice()
+                  .reverse()
+                  .find(msg => msg.role === 'user');
+                
+                if (lastUserMessage && lastUserMessage.content) {
+                  (toolArgs as any).query = lastUserMessage.content.slice(0, 200);
+                } else {
+                  (toolArgs as any).query = '요약할 검색 쿼리';
+                }
+              }
             }
             
             logEntry.args = toolArgs;
@@ -492,22 +619,25 @@ export async function processChatMessage(
       });
     }
 
-    // 어시스턴트 응답을 컨텍스트에 추가
-    await contextManager.addMessage(userId, 'assistant', finalAssistantResponse);
+    // 어시스턴트 응답을 컨텍스트에 추가 (빈 응답 처리)
+    const responseToSave = finalAssistantResponse.trim() || '🔧 도구를 사용하여 정보를 조회했습니다.';
+    await contextManager.addMessage(userId, 'assistant', responseToSave);
 
     // 컨텍스트 업데이트 (요약, 토큰 사용량 등)
     await contextManager.updateContext(userId, {
       summary: contextResult.currentSummary,
       conversationHistory: [...contextResult.finalMessages,
         { role: 'user', content: message, timestamp: Date.now() },
-        { role: 'assistant', content: finalAssistantResponse, timestamp: Date.now() }
+        { role: 'assistant', content: responseToSave, timestamp: Date.now() }
       ],
       tokenUsage: finalChatData?.usage?.total_tokens || 0
     });
 
-    // 성공 응답 구성
+    // 성공 응답 구성 (빈 응답 처리)
+    const finalResponse = finalAssistantResponse.trim() || '도구를 사용하여 정보를 조회했습니다. 다시 시도해주세요.';
+    
     return {
-      response: finalAssistantResponse,
+      response: finalResponse,
       model: selectedModel,
       usage: finalChatData?.usage,
       role: currentRole,

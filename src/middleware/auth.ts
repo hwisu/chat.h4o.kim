@@ -3,12 +3,18 @@ import { HTTPException } from 'hono/http-exception';
 import { checkAuthenticationOrUserKey, extractUserIdFromJWT } from '../services/auth';
 
 /**
- * Authentication middleware - handles all auth logic in one place
+ * Authentication middleware - Enhanced security
  */
 export async function authRequired(c: Context, next: Next): Promise<void> {
   const sessionToken = c.req.header('X-Session-Token');
   const userApiKey = c.req.header('X-User-API-Key');
-  const jwtSecret = c.env.JWT_SECRET || c.env.OPENROUTER_API_KEY || 'default-secret-key';
+  const jwtSecret = c.env.JWT_SECRET;
+  
+  if (!jwtSecret) {
+    throw new HTTPException(500, { 
+      message: 'Server configuration error' 
+    });
+  }
   
   const isAuthenticated = await checkAuthenticationOrUserKey(sessionToken, userApiKey, jwtSecret);
   
@@ -27,12 +33,19 @@ export async function authRequired(c: Context, next: Next): Promise<void> {
 }
 
 /**
- * Optional authentication middleware (passes through without authentication but sets context)
+ * Optional authentication middleware - Enhanced security
  */
 export async function optionalAuth(c: Context, next: Next): Promise<void> {
   const sessionToken = c.req.header('X-Session-Token');
   const userApiKey = c.req.header('X-User-API-Key');
-  const jwtSecret = c.env.JWT_SECRET || c.env.OPENROUTER_API_KEY || 'default-secret-key';
+  const jwtSecret = c.env.JWT_SECRET;
+  
+  if (!jwtSecret) {
+    // For optional auth, we can proceed without JWT secret
+    c.set('isAuthenticated', false);
+    await next();
+    return;
+  }
   
   const isAuthenticated = await checkAuthenticationOrUserKey(sessionToken, userApiKey, jwtSecret);
   

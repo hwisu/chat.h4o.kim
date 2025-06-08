@@ -95,13 +95,56 @@ export const API_CONFIG = {
   RETRY_DELAY_MS: 1000
 } as const;
 
-// Authentication Configuration
+// Enhanced Authentication Configuration
 export const AuthConfig = {
   JWT_ISSUER: 'https://chat.h4o.kim',
   JWT_EXPIRY_HOURS: 24,
+  JWT_ALGORITHM: 'HS256' as const,
   NONCE_BYTES_LENGTH: 16,
   COOKIE_MAX_AGE: 86400, // 24 hours
-  SESSION_TIMEOUT_MS: 86400000 // 24 hours
+  SESSION_TIMEOUT_MS: 86400000, // 24 hours
+  
+  // Security settings
+  MIN_PASSWORD_LENGTH: 8,
+  MAX_LOGIN_ATTEMPTS: 5,
+  LOGIN_LOCKOUT_DURATION_MS: 900000, // 15 minutes
+  
+  // Token settings
+  MIN_JWT_SECRET_LENGTH: 32,
+  TOKEN_REFRESH_THRESHOLD_MS: 3600000, // 1 hour before expiry
+} as const;
+
+// Enhanced Security Configuration
+export const SecurityConfig = {
+  // Rate limiting
+  RATE_LIMIT_WINDOW_MS: 900000, // 15 minutes
+  RATE_LIMIT_MAX_REQUESTS: 100,
+  
+  // API key validation
+  API_KEY_ENTROPY_THRESHOLD: 10,
+  API_KEY_BLACKLIST_PATTERNS: ['test', 'example', 'dummy', 'placeholder'],
+  
+  // Headers
+  SECURITY_HEADERS: {
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'X-XSS-Protection': '1; mode=block',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()',
+  },
+  
+  // Content Security Policy
+  CSP_DIRECTIVES: [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "connect-src 'self' https://openrouter.ai https://api.search.brave.com",
+    "img-src 'self' data:",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'"
+  ]
 } as const;
 
 // Response Messages - Functions for dynamic content
