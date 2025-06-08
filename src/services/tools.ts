@@ -420,11 +420,11 @@ export const AVAILABLE_TOOLS = [
         properties: {
           query: {
             type: 'string',
-            description: '검색할 쿼리. 구체적이고 명확한 검색어를 사용하세요.'
+            description: 'Search query. Use specific and clear search terms.'
           },
           max_results: {
             type: 'number',
-            description: '반환할 최대 검색 결과 수 (기본값: 5, 최대: 10)',
+            description: 'Maximum number of search results to return (default: 5, maximum: 10)',
             default: 5,
             minimum: 1,
             maximum: 10
@@ -438,13 +438,13 @@ export const AVAILABLE_TOOLS = [
     type: 'function',
     function: {
       name: 'search_and_summarize',
-      description: '인터넷에서 정보를 검색하고 AI가 요약한 결과를 제공합니다. 복잡한 주제나 여러 정보를 종합적으로 이해하고 싶을 때 유용합니다.',
+      description: 'Search the internet and provide the result of AI summarization. Useful when you want to understand complex topics or multiple pieces of information comprehensively.',
       parameters: {
         type: 'object',
         properties: {
           query: {
             type: 'string',
-            description: '검색하고 요약할 주제나 질문. 명확하고 구체적으로 작성하세요.'
+            description: 'Search and summarize the subject or question. Write clearly and concretely.'
           }
         },
         required: ['query']
@@ -455,13 +455,13 @@ export const AVAILABLE_TOOLS = [
     type: 'function',
     function: {
       name: 'get_current_time',
-      description: '현재 시간을 가져옵니다. 시간대 지정 가능합니다.',
+      description: 'Gets the current time. Timezone can be specified.',
       parameters: {
         type: 'object',
         properties: {
           timezone: {
             type: 'string',
-            description: '시간대 (예: Asia/Seoul, America/New_York). 생략하면 로컬 시간 사용.'
+            description: 'Timezone (e.g., Asia/Seoul, America/New_York). If omitted, local time will be used.'
           }
         },
         required: []
