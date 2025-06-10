@@ -10,10 +10,11 @@
     "strict": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "types": ["@cloudflare/workers-types", "svelte"],
+    "types": ["@cloudflare/workers-types", "./src/svelte"],
     "isolatedModules": true,
     "noEmit": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "verbatimModuleSyntax": true
   },
   "include": [
     "src/**/*.ts",
@@ -23,7 +24,6 @@
   "exclude": [
     "node_modules",
     "dist",
-    ".wrangler",
-    "**/*.d.ts"
+    ".wrangler"
   ]
 }

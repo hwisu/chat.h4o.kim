@@ -11,7 +11,7 @@ import models from './routes/models';
 import roles from './routes/roles';
 import staticFiles from './routes/static';
 import { contextManager } from './services/context';
-import { Env } from './types';
+import type { Env } from './types';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -69,7 +69,7 @@ app.get('/health', (c) => {
 app.post('/api/csp-report', async (c) => {
   try {
     const report = await c.req.json();
-    
+
     // CSP 위반 로깅 (실제 환경에서는 보안 모니터링 시스템으로 전송)
     console.warn('[CSP VIOLATION]', {
       'document-uri': report['csp-report']?.['document-uri'],
@@ -79,7 +79,7 @@ app.post('/api/csp-report', async (c) => {
       'column-number': report['csp-report']?.['column-number'],
       'source-file': report['csp-report']?.['source-file']
     });
-    
+
     c.status(204);
     return c.text('');
   } catch (error) {

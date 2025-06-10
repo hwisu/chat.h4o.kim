@@ -1,5 +1,5 @@
 import { supportsToolCalling as checkModelToolSupport } from '../routes/models';
-import { ChatCompletionResponse, ChatMessage } from '../types';
+import type { ChatCompletionResponse, ChatMessage } from '../types';
 import { contextManager } from './context';
 import {
   buildMessagesWithSummary,

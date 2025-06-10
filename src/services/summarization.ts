@@ -1,4 +1,4 @@
-import { ChatMessage, OpenRouterModel, OpenRouterModelsResponse } from '../types';
+import type { ChatMessage, OpenRouterModel, OpenRouterModelsResponse } from '../types';
 
 // Constants
 const SUMMARY_CACHE_DURATION_MS = 5 * 60 * 1000; // 5분
@@ -113,7 +113,7 @@ function filterSummaryModels(models: OpenRouterModel[]): OpenRouterModel[] {
  * 요약용 모델 목록 가져오기
  */
 async function getSummaryModels(apiKey: string): Promise<OpenRouterModel[]> {
-  if (summaryModelsCache && 
+  if (summaryModelsCache &&
       Date.now() - summaryModelsCache.timestamp < SUMMARY_CACHE_DURATION_MS) {
     return summaryModelsCache.models;
   }
@@ -144,7 +144,7 @@ async function getSummaryModels(apiKey: string): Promise<OpenRouterModel[]> {
       timestamp: Date.now()
     };
 
-    console.log(`📊 Summary models available (first 3):`, 
+    console.log(`📊 Summary models available (first 3):`,
       summaryModels.slice(0, 3).map(m => `${m.id}: ${m.context_length} tokens`).join('\n  ')
     );
 
@@ -196,7 +196,7 @@ export function shouldTriggerSummary(
   if (messages.length < MIN_MESSAGES_FOR_SUMMARY) {
     return false;
   }
-  
+
   const estimatedTokens = estimateTokenCount(messages);
   return estimatedTokens > config.maxTokensBeforeSummary;
 }
@@ -306,12 +306,12 @@ export async function summarizeConversation(
   }
 
   let summaryModels: OpenRouterModel[] = [];
-  
+
   try {
     summaryModels = await getSummaryModels(apiKey);
   } catch (error) {
     console.warn('Could not fetch summary models dynamically:', error);
-    
+
     if (fallbackModelId) {
       console.log(`🔄 Using current user model as summary fallback: ${fallbackModelId}`);
       summaryModels = [createFallbackModel(fallbackModelId)];
@@ -333,13 +333,13 @@ export async function summarizeConversation(
   }).join('\n\n');
 
   const maxRetries = Math.min(MAX_RETRY_MODELS, summaryModels.length);
-  
+
   for (let i = 0; i < maxRetries; i++) {
     const summaryModelId = summaryModels[i].id;
-    
+
     try {
       console.log(`🔄 Attempting summarization with model: ${summaryModelId}`);
-      
+
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -371,7 +371,7 @@ export async function summarizeConversation(
         }
       } else {
         console.warn(`❌ Summarization failed with model ${summaryModelId}: ${response.status} ${response.statusText}`);
-        
+
         if (i === maxRetries - 1) {
           throw new SummarizationError(
             `All summary models failed. Last error: ${response.status} ${response.statusText}`,
@@ -381,7 +381,7 @@ export async function summarizeConversation(
       }
     } catch (error) {
       console.warn(`❌ Error with summary model ${summaryModelId}:`, error);
-      
+
       if (i === maxRetries - 1) {
         throw new SummarizationError(
           `All summary models failed. Last error: ${error}`,

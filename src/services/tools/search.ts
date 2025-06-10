@@ -9,8 +9,8 @@ import {
   checkRateLimit,
   secureLog,
   SECURITY_CONFIG,
-  ToolResult,
-  SearchResult
+  type ToolResult,
+  type SearchResult
 } from './common';
 
 /**

@@ -1,19 +1,19 @@
 import jwt from 'jsonwebtoken';
 import { AuthConfig, MODEL_CONFIG } from '../routes/constants';
 
-export interface AuthResult {
+export type AuthResult = {
   success: boolean;
   token?: string;
   message: string;
 }
 
-export interface AuthStatus {
+export type AuthStatus = {
   authenticated: boolean;
   auth_method: string | null;
   auth_type: string | null;
 }
 
-interface JWTPayload {
+type JWTPayload = {
   pwd: string;
   iat: number;
   exp: number;
@@ -64,7 +64,7 @@ export async function authenticateUser(password: string, accessPassword: string,
 
     const nonce = generateSecureNonce();
     const expiresIn = AuthConfig.JWT_EXPIRY_HOURS * 60 * 60;
-    
+
     const payload = {
       pwd: password,
       nonce,
@@ -74,7 +74,7 @@ export async function authenticateUser(password: string, accessPassword: string,
       sub: 'user-session'
     };
 
-    const token = jwt.sign(payload, jwtSecret, { 
+    const token = jwt.sign(payload, jwtSecret, {
       expiresIn,
       algorithm: AuthConfig.JWT_ALGORITHM // Explicitly specify algorithm
     });
@@ -102,7 +102,7 @@ export async function verifyToken(token: string, jwtSecret: string): Promise<boo
       issuer: AuthConfig.JWT_ISSUER,
       maxAge: AuthConfig.JWT_EXPIRY_HOURS * 60 * 60 // Double-check expiry
     }) as JWTPayload;
-    
+
     // Enhanced validation
     return Boolean(
       decoded.pwd &&
@@ -144,20 +144,20 @@ export function isValidApiKey(apiKey?: string): boolean {
  * Check authentication using session token or user API key
  */
 export async function checkAuthenticationOrUserKey(
-  sessionToken?: string, 
-  userApiKey?: string, 
+  sessionToken?: string,
+  userApiKey?: string,
   jwtSecret?: string
 ): Promise<boolean> {
   // First try user API key (preferred for API access)
   if (userApiKey) {
     return isValidApiKey(userApiKey);
   }
-  
+
   // Fall back to session token
   if (sessionToken && jwtSecret) {
     return await verifyToken(sessionToken, jwtSecret);
   }
-  
+
   return false;
 }
 
@@ -165,8 +165,8 @@ export async function checkAuthenticationOrUserKey(
  * Get authentication status
  */
 export async function getAuthStatus(
-  sessionToken?: string, 
-  userApiKey?: string, 
+  sessionToken?: string,
+  userApiKey?: string,
   jwtSecret?: string
 ): Promise<AuthStatus> {
   if (userApiKey && isValidApiKey(userApiKey)) {
@@ -176,7 +176,7 @@ export async function getAuthStatus(
       auth_type: 'user'
     };
   }
-  
+
   if (sessionToken && jwtSecret && await verifyToken(sessionToken, jwtSecret)) {
     return {
       authenticated: true,
@@ -184,10 +184,10 @@ export async function getAuthStatus(
       auth_type: 'password'
     };
   }
-  
+
   return {
     authenticated: false,
     auth_method: null,
     auth_type: null
   };
-} 
+}

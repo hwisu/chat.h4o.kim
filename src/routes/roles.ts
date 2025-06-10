@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { authRequired } from '../middleware/auth';
 import { AVAILABLE_ROLES, getPublicRoleInfo, getRoleById } from '../roles';
-import { Env } from '../types';
+import type { Env } from '../types';
 import { ErrorStatus, RESPONSE_MESSAGES } from './constants';
 import { asyncHandler, errorResponse, parseJsonBody, successResponse } from './utils';
 

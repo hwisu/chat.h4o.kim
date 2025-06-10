@@ -2,7 +2,8 @@
  * Time related tools
  */
 
-import { secureLog, ToolResult } from './common';
+import { secureLog } from './common';
+import type { ToolResult } from './common';
 
 /**
  * Current time tool - provides current time in various timezones and formats
