@@ -2,7 +2,8 @@ import { Hono } from 'hono';
 import { authRequired } from '../middleware/auth';
 import { extractUserIdFromJWT } from '../services/auth';
 import { cryptoService } from '../services/crypto';
-import { Env, ModelInfo, OpenRouterModel, OpenRouterModelsResponse } from '../types';
+import { secureLog } from '../services/tools/common';
+import type { Env, ModelInfo, OpenRouterModel, OpenRouterModelsResponse } from '../types';
 import { API_CONFIG, ErrorStatus, MODEL_CONFIG, RESPONSE_MESSAGES } from './constants';
 import { asyncHandler, errorResponse, fetchWithTimeout, getCookieValue, parseJsonBody, setCookie, successResponse } from './utils';
 
@@ -33,7 +34,7 @@ function transformToModelInfo(openRouterModel: OpenRouterModel, isSelected = fal
     .replace(/:free\s*$/i, '');
 
   // Check if model supports tools
-  const supportsTools = openRouterModel.supported_parameters && 
+  const supportsTools = openRouterModel.supported_parameters &&
                        Array.isArray(openRouterModel.supported_parameters) &&
                        openRouterModel.supported_parameters.includes('tools');
 
@@ -49,7 +50,7 @@ function transformToModelInfo(openRouterModel: OpenRouterModel, isSelected = fal
 
 // Transform array of OpenRouterModels to ModelInfos
 function transformModelsArray(openRouterModels: OpenRouterModel[], selectedModelId?: string): ModelInfo[] {
-  return openRouterModels.map(model => 
+  return openRouterModels.map(model =>
     transformToModelInfo(model, model.id === selectedModelId)
   );
 }
@@ -57,15 +58,15 @@ function transformModelsArray(openRouterModels: OpenRouterModel[], selectedModel
 // Utility Functions
 function getProviderPriority(modelId: string, isUserApiKey = false): number {
   const lowerModelId = modelId.toLowerCase();
-  
+
   const priorities = isUserApiKey ? MODEL_CONFIG.PREMIUM_MODEL_PRIORITIES : MODEL_CONFIG.FREE_MODEL_PRIORITIES;
-  
+
   for (let i = 0; i < priorities.length; i++) {
     if (lowerModelId.includes(priorities[i])) {
       return i + 1;
     }
   }
-  
+
   return priorities.length + 1; // Lower priority for unknown providers
 }
 
@@ -77,7 +78,7 @@ function getContextSize(model: OpenRouterModel): number {
   console.warn(`⚠️ Using context size estimation for model: ${model.id}`);
 
   const modelId = model.id.toLowerCase();
-  
+
   // Pattern-based estimation for context window sizes
   const contextPatterns = [
     { pattern: '128k', size: 128000 },  // Large context models
@@ -86,7 +87,7 @@ function getContextSize(model: OpenRouterModel): number {
     { pattern: '8k', size: 8000 },      // Standard context models
     { pattern: '4k', size: 4000 }       // Small context models
   ];
-  
+
   for (const { pattern, size } of contextPatterns) {
     if (modelId.includes(pattern)) return size;
   }
@@ -97,7 +98,7 @@ function getContextSize(model: OpenRouterModel): number {
     { patterns: ['deepseek', 'gemini'], size: 32000 },                    // DeepSeek and Gemini typically have 32k context
     { patterns: ['gemma-2'], size: 8000 }                                 // Gemma-2 models have 8k context
   ];
-  
+
   for (const { patterns, size } of familyPatterns) {
     if (patterns.some(pattern => modelId.includes(pattern))) {
       return size;
@@ -115,7 +116,7 @@ function formatModelsResponse(models: OpenRouterModel[]): string {
     '',
     'Usage: /set-model <model-id> or /set-model auto'
   ];
-  
+
   return lines.join('\n');
 }
 
@@ -125,17 +126,17 @@ export function filterFreeModels(models: OpenRouterModel[]): OpenRouterModel[] {
     .filter((m: OpenRouterModel) => {
       // Only include models ending with :free
       if (!m.id.endsWith(':free')) return false;
-      
+
       // Exclude small/low-quality models
       if (m.id.toLowerCase().match(/mini|micro|small/)) return false;
-      
+
       // Filter by model size (require minimum 8B parameters for quality)
       const sizeMatch = m.id.toLowerCase().match(/(\d+(?:\.\d+)?)b/);
       if (sizeMatch) {
         const size = parseFloat(sizeMatch[1]);
         return size >= MODEL_CONFIG.MIN_FREE_MODEL_SIZE_B;
       }
-      
+
       return true;
     })
     .sort((a, b) => {
@@ -159,24 +160,24 @@ export function filterFreeModels(models: OpenRouterModel[]): OpenRouterModel[] {
 export function filterToolsSupportModels(models: OpenRouterModel[]): OpenRouterModel[] {
   return models.filter((model: OpenRouterModel) => {
     // Check if model supports tools in supported_parameters
-    const supportsTools = model.supported_parameters && 
+    const supportsTools = model.supported_parameters &&
                          Array.isArray(model.supported_parameters) &&
                          model.supported_parameters.includes('tools');
-    
+
     if (!supportsTools) return false;
-    
+
     // Also filter by quality criteria (same as free models)
     if (model.id.endsWith(':free')) {
       // For free models, apply quality filters
       if (model.id.toLowerCase().match(/mini|micro|small/)) return false;
-      
+
       const sizeMatch = model.id.toLowerCase().match(/(\d+(?:\.\d+)?)b/);
       if (sizeMatch) {
         const size = parseFloat(sizeMatch[1]);
         return size >= MODEL_CONFIG.MIN_FREE_MODEL_SIZE_B;
       }
     }
-    
+
     return true;
   });
 }
@@ -270,7 +271,7 @@ export async function autoSelectModel(c: any, apiKey: string, skipLog?: boolean)
     if (!skipLog) {
       console.log(`🎯 Auto-selected model: ${selectedModel}`);
     }
-    
+
     return selectedModel;
   } catch (error) {
     console.error('❌ Auto-selection failed:', error);
@@ -314,7 +315,7 @@ async function fetchModels(apiKey: string, hasUserApiKey: boolean): Promise<Open
     }
 
     const data: OpenRouterModelsResponse = await response.json();
-    
+
     if (!data?.data || !Array.isArray(data.data)) {
       throw new Error('Invalid response format from OpenRouter API');
     }
@@ -344,7 +345,7 @@ models.get('/models', authRequired, asyncHandler(async (c) => {
     const apiKey = await getApiKey(c);
     const hasUserApiKey = !!c.req.header('X-User-API-Key');
     const toolsOnly = c.req.query('tools_only') === 'true'; // 툴 지원 모델만 필터링
-    
+
     // Check cache first
     const cacheKey = `${hasUserApiKey ? 'user' : 'server'}_${toolsOnly ? 'tools' : 'all'}`;
     if (modelsCache && Date.now() - modelsCache.timestamp < MODEL_CONFIG.MODEL_CACHE_TTL_MS) {
@@ -361,14 +362,14 @@ models.get('/models', authRequired, asyncHandler(async (c) => {
     // Fetch fresh models
     const openRouterModels = await fetchModels(apiKey, hasUserApiKey);
     const selectedModelId = getSelectedModelFromCookie(c) || undefined;
-    
+
     let filteredModels = openRouterModels;
-    
+
     // Apply filters
     if (!hasUserApiKey) {
       filteredModels = filterFreeModels(openRouterModels);
     }
-    
+
     if (toolsOnly) {
       filteredModels = filterToolsSupportModels(filteredModels);
     }

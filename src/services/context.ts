@@ -1,4 +1,4 @@
-import { ChatMessage, Env } from '../types';
+import type { ChatMessage, Env } from '../types';
 
 // Constants
 const DEFAULT_MAX_TOKENS = 100000;
@@ -131,14 +131,14 @@ export class ContextManager {
   async getOrCreateContext(userId: string): Promise<ConversationContext> {
     // 캐시에서 먼저 확인
     let context = this.cache.get(userId);
-    
+
     if (context) {
       return context;
     }
 
     // D1에서 로드 시도
     const loadedContext = await this.loadContextFromD1(userId);
-    
+
     if (loadedContext) {
       // 캐시에 저장
       this.cache.set(userId, loadedContext);
@@ -157,7 +157,7 @@ export class ContextManager {
     }
 
     const context = await this.getOrCreateContext(userId);
-    
+
     const message: ChatMessage = {
       role,
       content: content.trim(),
@@ -176,14 +176,14 @@ export class ContextManager {
 
   async updateContext(userId: string, updates: Partial<ConversationContext>): Promise<void> {
     const context = await this.getOrCreateContext(userId);
-    
+
     // updatedAt는 항상 현재 시간으로 설정
     const updatedContext = {
       ...context,
       ...updates,
       updatedAt: Date.now()
     };
-    
+
     // 캐시 업데이트
     this.cache.set(userId, updatedContext);
 
@@ -215,8 +215,8 @@ export class ContextManager {
 
     try {
       await this.env.DB.prepare(`
-        INSERT OR REPLACE INTO user_contexts 
-        (user_id, conversation_history, summary, token_usage) 
+        INSERT OR REPLACE INTO user_contexts
+        (user_id, conversation_history, summary, token_usage)
         VALUES (?, ?, ?, ?)
       `).bind(
         context.id,
@@ -233,7 +233,7 @@ export class ContextManager {
   getStats(): ContextStats {
     const contexts = Array.from(this.cache.values());
     const timestamps = contexts.map(c => c.updatedAt);
-    
+
     return {
       totalContexts: this.cache.size,
       cacheSize: this.cache.size,
@@ -255,4 +255,4 @@ export class ContextManager {
 }
 
 // 싱글톤 인스턴스
-export const contextManager = new ContextManager(); 
+export const contextManager = new ContextManager();

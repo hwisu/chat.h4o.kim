@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { authRequired, getUserIdFromContext } from '../middleware/auth';
 import { contextManager } from '../services/context';
-import { Env } from '../types';
+import type { Env } from '../types';
 import { RESPONSE_MESSAGES } from './constants';
 import { asyncHandler, successResponse } from './utils';
 
@@ -11,7 +11,7 @@ const context = new Hono<{ Bindings: Env }>();
 context.get('/context', authRequired, asyncHandler(async (c) => {
   const userId = getUserIdFromContext(c);
   const contextData = await contextManager.getOrCreateContext(userId);
-  
+
   return successResponse(c, {
     context: {
       id: contextData.id,
@@ -30,7 +30,7 @@ context.get('/context', authRequired, asyncHandler(async (c) => {
 context.post('/context/clear', authRequired, asyncHandler(async (c) => {
   const userId = getUserIdFromContext(c);
   await contextManager.clearContext(userId);
-  
+
   return successResponse(c, {}, RESPONSE_MESSAGES.CONTEXT_CLEARED);
 }));
 

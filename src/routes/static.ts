@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
-import { Env } from '../types';
+import { serveStatic } from 'hono/cloudflare-workers';
+import type { Env } from '../types';
 
 const staticFiles = new Hono<{ Bindings: Env }>();
 

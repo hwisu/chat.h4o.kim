@@ -8,8 +8,8 @@ import {
   checkRateLimit,
   isValidApiUrl,
   SECURITY_CONFIG,
-  ToolResult,
-  SummaryResult
+  type ToolResult,
+  type SummaryResult
 } from './common';
 
 import { searchWeb } from './search';

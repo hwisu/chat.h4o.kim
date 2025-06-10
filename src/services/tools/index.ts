@@ -4,7 +4,7 @@
  */
 
 // 먼저 타입과 인터페이스 임포트
-import { ToolResult } from './common';
+import type { ToolResult } from './common';
 
 // 도구 함수들 임포트
 import { searchWeb } from './search';
