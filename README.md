@@ -12,6 +12,9 @@ Terminal-style chat interface using OpenRouter free models with Korean language 
 - Model selection
 - Context management
 - Svelte integration for modern UI components
+- Web search with Brave Search API
+- High-quality translation with DeepL API
+- Automatic Korean-to-English translation for search queries
 
 ## Svelte Integration
 
@@ -77,6 +80,9 @@ OPENROUTER_API_KEY=your_openrouter_api_key
 
 # 웹 검색 기능을 위한 Brave Search API 키 (선택사항)
 BRAVE_SEARCH_API_KEY=your_brave_search_api_key
+
+# DeepL 번역 API 키 (선택사항)
+DEEPL_API_KEY=your_deepl_api_key
 ```
 
 ### Brave Search API 설정 (웹 검색 기능)
@@ -88,6 +94,27 @@ BRAVE_SEARCH_API_KEY=your_brave_search_api_key
 3. **환경변수 설정**: `BRAVE_SEARCH_API_KEY=tvly-your_api_key`
 
 설정하지 않으면 DuckDuckGo 폴백이 사용됩니다 (제한적).
+
+### DeepL 번역 API 설정 (번역 기능)
+
+고품질 번역 기능을 사용하려면 DeepL API 키가 필요합니다.
+
+1. **무료 API 키 발급**: https://www.deepl.com/ko/pro-api 에서 회원가입
+2. **무료 제한**: 월 500,000 문자
+3. **환경변수 설정**: `DEEPL_API_KEY=your_deepl_api_key`
+
+설정하지 않으면 번역 도구와 검색 쿼리 번역 기능이 제한됩니다.
+
+### 개발 환경 설정
+
+개발 시에는 `.dev.vars` 파일을 프로젝트 루트에 생성하여 환경변수를 설정하세요:
+
+```bash
+# .dev.vars 파일
+OPENROUTER_API_KEY=your_openrouter_api_key
+BRAVE_SEARCH_API_KEY=your_brave_search_api_key
+DEEPL_API_KEY=your_deepl_api_key
+```
 
 ## 개발 서버 실행
 

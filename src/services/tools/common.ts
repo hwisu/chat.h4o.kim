@@ -8,7 +8,8 @@ export const SECURITY_CONFIG = {
   MAX_RESULTS_LIMIT: 10,
   ALLOWED_DOMAINS: [
     'api.search.brave.com',
-    'openrouter.ai'
+    'openrouter.ai',
+    'api-free.deepl.com'
   ],
   REQUEST_TIMEOUT: 10000,
   SUMMARIZER_TIMEOUT: 15000

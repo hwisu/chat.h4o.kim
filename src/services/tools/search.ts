@@ -204,101 +204,22 @@ export async function searchWeb(query: string, maxResults: number = 5, env?: any
       }
     }
 
-    // 결과가 없는 경우 한국어라면 AI 번역으로 재시도
+    // 결과가 없는 경우 한국어라면 DeepL 번역으로 재시도
     if (results.length === 0) {
       const hasKorean = /[가-힣]/.test(sanitizedQuery);
 
       if (hasKorean) {
-        secureLog('info', 'Retrying search with AI translation');
+        secureLog('info', 'Retrying search with DeepL translation');
 
-        // OpenRouter API 키 가져오기
-        const openrouterApiKey = env?.OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY;
         let englishQuery = sanitizedQuery;
 
-        if (openrouterApiKey) {
-          try {
-            const translationUrl = 'https://openrouter.ai/api/v1/chat/completions';
-
-            // URL 검증
-            if (!isValidApiUrl(translationUrl, SECURITY_CONFIG.ALLOWED_DOMAINS)) {
-              throw new Error('Invalid translation API URL');
-            }
-
-            const translationResponse = await fetch(translationUrl, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${openrouterApiKey}`,
-                'Content-Type': 'application/json',
-                'X-Title': 'ChatH4O Translation Service'
-              },
-              body: JSON.stringify({
-                model: 'google/gemma-3-12b-it:free',
-                messages: [
-                  {
-                    role: 'system',
-                    content: 'You are a translator. Translate Korean text to English for search engines. Keep technical terms like "RxJS", "Angular", etc. unchanged.'
-                  },
-                  {
-                    role: 'user',
-                    content: sanitizedQuery
-                  }
-                ],
-                max_tokens: 100,
-                temperature: 0.3,
-                response_format: {
-                  type: "json_object",
-                  schema: {
-                    type: "object",
-                    properties: {
-                      query: {
-                        type: "string",
-                        description: "The translated search query in English"
-                      }
-                    },
-                    required: ["query"],
-                    additionalProperties: false
-                  }
-                }
-              }),
-              signal: AbortSignal.timeout(5000)
-            });
-
-            if (translationResponse.ok) {
-              const translationData = await translationResponse.json() as any;
-              const translatedContent = translationData.choices?.[0]?.message?.content;
-
-              if (translatedContent) {
-                try {
-                  // 🎯 Structured Output으로 깔끔한 JSON 파싱
-                  const parsed = JSON.parse(translatedContent);
-                  if (parsed.query && typeof parsed.query === 'string') {
-                    englishQuery = sanitizeInput(parsed.query.trim());
-                    secureLog('info', 'AI translation completed successfully');
-                  } else {
-                    secureLog('warn', 'Invalid translation response structure');
-                  }
-                } catch (parseError) {
-                  secureLog('warn', 'Translation parsing failed, using fallback');
-
-                  // 🔧 Fallback: 따옴표 안의 텍스트 추출 시도
-                  const quotedTextMatch = translatedContent.match(/"([^"]+)"/);
-                  if (quotedTextMatch && quotedTextMatch[1]) {
-                    const extracted = quotedTextMatch[1];
-                    if (extracted.toLowerCase().includes('rxjs') || extracted.toLowerCase().includes('documentation')) {
-                      try {
-                        englishQuery = sanitizeInput(extracted);
-                        secureLog('info', 'Fallback extraction successful');
-                      } catch (sanitizeError) {
-                        secureLog('warn', 'Fallback extraction failed sanitization');
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          } catch (translationError) {
-            secureLog('warn', 'AI translation failed, using basic fallback');
-          }
+        // DeepL 번역 시도
+        try {
+          const { translateKoreanToEnglish } = await import('./translate');
+          englishQuery = await translateKoreanToEnglish(sanitizedQuery, env);
+          secureLog('info', 'DeepL translation completed successfully');
+        } catch (translationError) {
+          secureLog('warn', 'DeepL translation failed, using basic fallback');
         }
 
         // Fallback: 기술 키워드만 추출
@@ -351,7 +272,7 @@ export async function searchWeb(query: string, maxResults: number = 5, env?: any
                       title: sanitizeOutput(item.title || 'No title'),
                       url: item.url || '',
                       snippet: sanitizeOutput(item.description || 'No description available'),
-                      source: 'Brave Search (AI Translation)',
+                      source: 'Brave Search (DeepL Translation)',
                       domain: url.hostname,
                       published: item.age || undefined,
                       relevanceScore: item.score || undefined
@@ -363,23 +284,23 @@ export async function searchWeb(query: string, maxResults: number = 5, env?: any
               }
 
               if (englishResults.length > 0) {
-                secureLog('info', 'AI translation retry successful');
+                secureLog('info', 'DeepL translation retry successful');
                 return {
                   success: true,
                   data: {
-                    query: `${sanitizedQuery} (번역됨)`,
+                    query: `${sanitizedQuery} (DeepL 번역)`,
                     results: englishResults,
                     timestamp: new Date().toISOString(),
-                    source: 'Brave Search API (AI Translation)',
+                    source: 'Brave Search API (DeepL Translation)',
                     searchTime: Date.now() - searchStartTime,
                     totalResults: englishResults.length
                   }
                 };
               }
             }
-          } catch (retryError) {
-            secureLog('warn', 'AI translation retry failed');
-          }
+                      } catch (retryError) {
+              secureLog('warn', 'DeepL translation retry failed');
+            }
         }
       }
 
