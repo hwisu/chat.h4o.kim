@@ -15,6 +15,16 @@ export interface TranslationResult {
   timestamp: string;
 }
 
+// DeepL API 응답 타입 정의
+interface DeepLTranslation {
+  detected_source_language: string;
+  text: string;
+}
+
+interface DeepLResponse {
+  translations: DeepLTranslation[];
+}
+
 /**
  * DeepL API를 사용한 번역
  */
@@ -62,7 +72,7 @@ async function translateWithDeepL(
     throw new Error(`DeepL API error (${response.status}): ${errorText}`);
   }
 
-  const data = await response.json();
+      const data = await response.json() as DeepLResponse;
 
   if (!data.translations || !Array.isArray(data.translations) || data.translations.length === 0) {
     throw new Error('Invalid DeepL API response');
