@@ -77,8 +77,8 @@ function shouldTriggerSummary(
   currentSummary: string | null,
   messagesLength: number
 ): boolean {
-  return actualTokenCount > SUMMARY_THRESHOLD_TOKENS && 
-         !currentSummary && 
+  return actualTokenCount > SUMMARY_THRESHOLD_TOKENS &&
+         !currentSummary &&
          messagesLength >= MIN_MESSAGES_FOR_SUMMARY;
 }
 
@@ -183,8 +183,8 @@ export function prepareChatRequest(
  * OpenRouter API 호출 (타임아웃 포함)
  */
 export async function callOpenRouterAPI(
-  apiKey: string, 
-  body: any, 
+  apiKey: string,
+  body: any,
   timeoutMs: number = DEFAULT_TIMEOUT_MS
 ): Promise<Response> {
   if (!apiKey) {
@@ -264,7 +264,7 @@ async function validateAndParseResponse(response: Response, selectedModel: strin
  */
 function getSystemPromptPreview(systemPrompt: string): string {
   if (!systemPrompt) return 'No system prompt';
-  return systemPrompt.length > SYSTEM_PROMPT_PREVIEW_LENGTH 
+  return systemPrompt.length > SYSTEM_PROMPT_PREVIEW_LENGTH
     ? systemPrompt.substring(0, SYSTEM_PROMPT_PREVIEW_LENGTH) + '...'
     : systemPrompt;
 }
@@ -277,13 +277,13 @@ export async function processChatMessage(
   params: ChatRequestParams
 ): Promise<ChatResponse> {
   const { userId, currentRole, apiKey, selectedModel, systemPrompt } = context;
-  const { 
-    message, 
-    temperature = DEFAULT_TEMPERATURE, 
-    max_tokens = DEFAULT_MAX_TOKENS, 
-    top_p = DEFAULT_TOP_P, 
-    frequency_penalty = DEFAULT_FREQUENCY_PENALTY, 
-    presence_penalty = DEFAULT_PRESENCE_PENALTY 
+  const {
+    message,
+    temperature = DEFAULT_TEMPERATURE,
+    max_tokens = DEFAULT_MAX_TOKENS,
+    top_p = DEFAULT_TOP_P,
+    frequency_penalty = DEFAULT_FREQUENCY_PENALTY,
+    presence_penalty = DEFAULT_PRESENCE_PENALTY
   } = params;
 
   if (!message?.trim()) {
@@ -385,7 +385,7 @@ export async function processChatMessage(
 
           try {
             const toolName = toolCall.function.name;
-            
+
             // toolCall.function.arguments가 undefined이거나 빈 문자열인 경우 처리
             let toolArgs = {};
             if (toolCall.function.arguments && toolCall.function.arguments.trim()) {
@@ -397,7 +397,7 @@ export async function processChatMessage(
                   rawArguments: toolCall.function.arguments,
                   parseError: parseError instanceof Error ? parseError.message : 'Unknown parse error'
                 });
-                
+
                                  // 1단계: 정규식으로 JSON 구조 복구 시도
                  let recoveredArgs: any = null;
                  try {
@@ -415,7 +415,7 @@ export async function processChatMessage(
                        console.log(`✓ Extracted unquoted query: "${query}"`);
                      }
                    }
-                   
+
                    // max_results 파라미터도 복구 시도
                    if (recoveredArgs) {
                      const maxResultsMatch = toolCall.function.arguments.match(/"?max_results"?\s*:\s*(\d+)/);
@@ -426,24 +426,24 @@ export async function processChatMessage(
                 } catch (regexError) {
                   console.warn('Regex recovery also failed:', regexError);
                 }
-                
+
                 // 3단계: 사용자 메시지에서 직접 쿼리 추출 (최후의 수단)
                 if (!recoveredArgs) {
                   const lastUserMessage = conversationMessages
                     .slice()
                     .reverse()
                     .find(msg => msg.role === 'user');
-                  
+
                   if (lastUserMessage && lastUserMessage.content) {
                     let userQuery = lastUserMessage.content.trim();
-                    
+
                     // "rxjs 문서"와 같은 특정 키워드 추출 개선
                     const keywordPatterns = [
                       /최신\s+(\w+)\s+문서/g,  // "최신 rxjs 문서"
                       /(\w+)\s+(?:문서|버전|차이|업데이트)/g,  // "rxjs 버전"
                       /(\w+)\s+vs\s+(\w+)/g,  // "A vs B"
                     ];
-                    
+
                     let extractedQuery = userQuery;
                     for (const pattern of keywordPatterns) {
                       const matches = userQuery.match(pattern);
@@ -452,22 +452,22 @@ export async function processChatMessage(
                         break;
                       }
                     }
-                    
+
                     // 영어 키워드는 그대로 유지하도록 개선
                     if (userQuery.includes('rxjs')) {
                       extractedQuery = userQuery.replace(/을|를|에서|의|과|와|차이|알려|줘|읽고|지난/g, ' ')
                         .replace(/\s+/g, ' ')
                         .trim();
                     }
-                    
-                    recoveredArgs = { 
+
+                    recoveredArgs = {
                       query: extractedQuery.slice(0, 200), // 최대 200자
-                      max_results: 5 
+                      max_results: 5
                     };
                     console.log(`✓ Extracted query from user message: "${extractedQuery}"`);
                   }
                 }
-                
+
                 if (recoveredArgs && recoveredArgs.query) {
                   toolArgs = recoveredArgs;
                 } else {
@@ -477,13 +477,13 @@ export async function processChatMessage(
             } else {
               console.warn(`⚠️ Tool ${toolName} called with empty or undefined arguments, using empty object`);
             }
-            
+
             // 🔧 Tool arguments 유효성 검증 및 기본값 설정
             if (toolName === 'search_web') {
               if (!toolArgs || typeof toolArgs !== 'object') {
                 toolArgs = {};
               }
-              
+
               // query 파라미터가 없는 경우 기본값 설정
               if (!(toolArgs as any).query) {
                 console.warn(`⚠️ search_web called without query parameter, attempting to infer from context`);
@@ -492,7 +492,7 @@ export async function processChatMessage(
                   .slice()
                   .reverse()
                   .find(msg => msg.role === 'user');
-                
+
                 if (lastUserMessage && lastUserMessage.content) {
                   (toolArgs as any).query = lastUserMessage.content.slice(0, 200); // 최대 200자
                   console.log(`✓ Inferred query from user message: ${(toolArgs as any).query}`);
@@ -500,7 +500,7 @@ export async function processChatMessage(
                   (toolArgs as any).query = '검색 쿼리';
                 }
               }
-              
+
               // max_results 기본값 설정
               if (!(toolArgs as any).max_results) {
                 (toolArgs as any).max_results = 5;
@@ -509,13 +509,13 @@ export async function processChatMessage(
               if (!toolArgs || typeof toolArgs !== 'object') {
                 toolArgs = {};
               }
-              
+
               if (!(toolArgs as any).query) {
                 const lastUserMessage = conversationMessages
                   .slice()
                   .reverse()
                   .find(msg => msg.role === 'user');
-                
+
                 if (lastUserMessage && lastUserMessage.content) {
                   (toolArgs as any).query = lastUserMessage.content.slice(0, 200);
                 } else {
@@ -523,23 +523,23 @@ export async function processChatMessage(
                 }
               }
             }
-            
+
             logEntry.args = toolArgs;
             console.log(`🔧 Executing tool: ${toolName} with args:`, toolArgs);
-            
+
             // tools.ts 모듈에서 직접 import된 함수들 사용
             let toolResult;
             if (toolName === 'search_web') {
               const { searchWeb } = await import('./tools');
               toolResult = await searchWeb(
-                (toolArgs as any).query || '', 
-                (toolArgs as any).max_results || 5, 
+                (toolArgs as any).query || '',
+                (toolArgs as any).max_results || 5,
                 context.env
               );
             } else if (toolName === 'search_and_summarize') {
               const { searchAndSummarize } = await import('./tools');
               toolResult = await searchAndSummarize(
-                (toolArgs as any).query || '', 
+                (toolArgs as any).query || '',
                 context.env
               );
             } else if (toolName === 'get_current_time') {
@@ -551,7 +551,7 @@ export async function processChatMessage(
                 error: `Unknown tool: ${toolName}`
               };
             }
-            
+
             logEntry.result = toolResult;
             if (toolResult.success) {
               logEntry.status = 'success';
@@ -563,7 +563,7 @@ export async function processChatMessage(
               console.warn(`⚠️ Tool ${toolName} returned error:`, toolResult.error);
               logEntry.error = toolResult.error;
             }
-            
+
             // Tool 결과를 대화에 추가
             conversationMessages.push({
               role: 'tool',
@@ -580,7 +580,7 @@ export async function processChatMessage(
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             logEntry.error = errorMessage;
             console.error(`❌ Tool execution failed:`, error);
-            
+
             // 에러 결과를 대화에 추가
             conversationMessages.push({
               role: 'tool',
@@ -611,10 +611,10 @@ export async function processChatMessage(
         totalExecutions: toolExecutionLog.length,
         successful: toolExecutionLog.filter(log => log.status === 'success').length,
         failed: toolExecutionLog.filter(log => log.status === 'error').length,
-        tools: toolExecutionLog.map(log => ({ 
-          name: log.toolName, 
+        tools: toolExecutionLog.map(log => ({
+          name: log.toolName,
           status: log.status,
-          timestamp: log.timestamp 
+          timestamp: log.timestamp
         }))
       });
     }
@@ -635,7 +635,7 @@ export async function processChatMessage(
 
     // 성공 응답 구성 (빈 응답 처리)
     const finalResponse = finalAssistantResponse.trim() || '도구를 사용하여 정보를 조회했습니다. 다시 시도해주세요.';
-    
+
     return {
       response: finalResponse,
       model: selectedModel,
@@ -682,4 +682,4 @@ export function getHelpMessage(): string {
 • Context is automatically managed for optimal performance
 
 Type your message to start chatting!`;
-} 
+}

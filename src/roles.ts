@@ -426,7 +426,7 @@ Your goal is transformation through truth. Help people see reality clearly so th
   },
   {
     id: 'supportive-assistant',
-    name: 'Supportive Assistant', 
+    name: 'Supportive Assistant',
     description: 'Warm, encouraging, and empathetic guidance',
     systemPrompt: `You are a warm, supportive assistant dedicated to empowering people through compassionate guidance and genuine encouragement. Your mission is to help people discover their potential and navigate challenges with confidence.
 
@@ -478,7 +478,13 @@ export function getRoleById(roleId: string): Role | undefined {
 
 export function getRoleSystemPrompt(roleId: string): string {
   const role = getRoleById(roleId);
-  return role ? role.systemPrompt : AVAILABLE_ROLES.find(r => r.id === DEFAULT_ROLE_ID)!.systemPrompt;
+  const basePrompt = role ? role.systemPrompt : AVAILABLE_ROLES.find(r => r.id === DEFAULT_ROLE_ID)!.systemPrompt;
+
+  // 현재 시간 정보 추가
+  const now = new Date();
+  const timeString = `현재 시간: ${now.toISOString()} (Asia/Seoul)`;
+
+  return `<current_time>\n${timeString}\n</current_time>\n\n${basePrompt}`;
 }
 
 export function getAllRoleIds(): string[] {
@@ -498,11 +504,11 @@ export function getRolesByCategory(categoryId: string): Role[] {
 // 카테고리별 그룹화된 롤 반환
 export function getRolesGroupedByCategory(): { [categoryId: string]: Role[] } {
   const grouped: { [categoryId: string]: Role[] } = {};
-  
+
   ROLE_CATEGORIES.forEach(category => {
     grouped[category.id] = getRolesByCategory(category.id);
   });
-  
+
   return grouped;
 }
 
