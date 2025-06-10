@@ -18,7 +18,8 @@ context.get('/context', authRequired, asyncHandler(async (c) => {
       messageCount: contextData.conversationHistory.length,
       summary: contextData.summary,
       tokenUsage: contextData.tokenUsage,
-      lastUpdated: contextData.updatedAt
+      lastUpdated: contextData.updatedAt,
+      createdAt: contextData.createdAt
     },
     usage: `${contextData.tokenUsage} tokens`,
     maxSize: contextData.maxTokens,

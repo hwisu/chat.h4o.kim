@@ -11,6 +11,7 @@ export interface ConversationContext {
   summary: string | null;
   tokenUsage: number;
   updatedAt: number;
+  createdAt: number;
   maxTokens: number;
   maxAge: number;
 }
@@ -75,9 +76,36 @@ export class ContextManager {
       }
     }
 
+    // D1 데이터베이스에서도 오래된 컨텍스트 정리
+    this.cleanupExpiredContextsFromD1(now);
+
     // 🔒 보안 개선: 운영 환경에서는 개인정보 로깅 방지
     if (cleanedCount > 0 && typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production') {
-      console.log(`🧹 Cleaned up ${cleanedCount} expired contexts`);
+      console.log(`🧹 Cleaned up ${cleanedCount} expired contexts from cache`);
+    }
+  }
+
+  /**
+   * D1 데이터베이스에서 오래된 컨텍스트 정리
+   */
+  private async cleanupExpiredContextsFromD1(now: number): Promise<void> {
+    if (!this.env?.DB) {
+      return;
+    }
+
+    try {
+      const maxAgeSeconds = Math.floor(this.config.maxAge / 1000);
+      const cutoffTime = Math.floor(now / 1000) - maxAgeSeconds;
+
+      const result = await this.env.DB.prepare(
+        'DELETE FROM user_contexts WHERE updated_at < ?'
+      ).bind(cutoffTime).run();
+
+      if (result.meta?.changes && result.meta.changes > 0 && typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production') {
+        console.log(`🧹 Cleaned up ${result.meta.changes} expired contexts from D1 database`);
+      }
+    } catch (error) {
+      console.warn('D1 데이터베이스 정리 실패:', error);
     }
   }
 
@@ -103,7 +131,8 @@ export class ContextManager {
         conversationHistory: JSON.parse(result.conversation_history as string),
         summary: result.summary as string | null,
         tokenUsage: result.token_usage as number,
-        updatedAt: result.updated_at as number,
+        updatedAt: (result.updated_at as number) * 1000, // DB에서는 초 단위, 메모리에서는 밀리초 단위
+        createdAt: (result.created_at as number) * 1000, // DB에서는 초 단위, 메모리에서는 밀리초 단위
         maxTokens: this.config.maxTokens,
         maxAge: this.config.maxAge
       };
@@ -117,12 +146,14 @@ export class ContextManager {
    * 새 컨텍스트 생성
    */
   private createNewContext(userId: string): ConversationContext {
+    const now = Date.now();
     return {
       id: userId,
       conversationHistory: [],
       summary: null,
       tokenUsage: 0,
-      updatedAt: Date.now(),
+      updatedAt: now,
+      createdAt: now,
       maxTokens: this.config.maxTokens,
       maxAge: this.config.maxAge
     };
@@ -214,15 +245,20 @@ export class ContextManager {
     }
 
     try {
+      const nowSeconds = Math.floor(context.updatedAt / 1000);
+      const createdAtSeconds = Math.floor(context.createdAt / 1000);
+
       await this.env.DB.prepare(`
         INSERT OR REPLACE INTO user_contexts
-        (user_id, conversation_history, summary, token_usage)
-        VALUES (?, ?, ?, ?)
+        (user_id, conversation_history, summary, token_usage, updated_at, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
       `).bind(
         context.id,
         JSON.stringify(context.conversationHistory),
         context.summary,
-        context.tokenUsage
+        context.tokenUsage,
+        nowSeconds,
+        createdAtSeconds
       ).run();
     } catch (error) {
       console.warn('D1 컨텍스트 저장 실패:', error);
