@@ -151,7 +151,7 @@
     background: none;
     border: none;
     font-family: inherit;
-    font-size: clamp(12px, 2vw, 16px);
+    font-size: clamp(14px, 2vw, 18px);
     cursor: pointer;
     padding: 8px 12px;
     border-radius: 4px;
@@ -169,7 +169,7 @@
   }
 
   .tools-indicator {
-    font-size: 10px;
+    font-size: 12px;
     font-weight: bold;
     color: #00ff00;
     background: rgba(0, 255, 0, 0.2);
@@ -204,7 +204,7 @@
   }
 
   .context-info {
-    font-size: clamp(10px, 1.5vw, 14px);
+    font-size: clamp(12px, 1.5vw, 16px);
     color: #88ccff;
     font-weight: 500;
   }
@@ -217,12 +217,12 @@
     }
     
     .model-title, .role-title {
-      font-size: 12px;
+      font-size: 14px;
       padding: 4px 8px;
     }
 
     .context-info {
-      font-size: 10px;
+      font-size: 12px;
     }
   }
 

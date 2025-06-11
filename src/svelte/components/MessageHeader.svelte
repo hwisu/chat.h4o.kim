@@ -38,7 +38,7 @@
 <style>
   .message-header {
     margin-bottom: 8px;
-    font-size: 14px;
+    font-size: 16px;
     font-family: 'MonoplexKRNerd', monospace;
   }
 

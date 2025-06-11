@@ -245,7 +245,7 @@
 <style>
   .code-highlighter {
     line-height: 1.6;
-    font-size: 16px;
+    font-size: 18px;
     word-wrap: break-word;
     overflow-wrap: break-word;
   }
@@ -267,7 +267,7 @@
     padding: 2px 6px;
     border-radius: 4px;
     font-family: 'MonoplexKRNerd', monospace;
-    font-size: 15px;
+    font-size: 17px;
     color: #7FB4CA !important; /* springBlue */
     border: 1px solid rgba(0, 255, 0, 0.2);
   }
@@ -289,7 +289,7 @@
     background: none !important;
     padding: 0 !important;
     font-family: 'MonoplexKRNerd', monospace;
-    font-size: 15px;
+    font-size: 17px;
     line-height: 1.5;
     color: #DCD7BA;
     border: none !important;

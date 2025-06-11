@@ -309,7 +309,7 @@
 
   .model-modal-header h3 {
     margin: 0;
-    font-size: 18px;
+    font-size: 20px;
     color: #eee;
   }
 
@@ -317,7 +317,7 @@
     background: none;
     border: none;
     color: #888;
-    font-size: 24px;
+    font-size: 26px;
     cursor: pointer;
     padding: 0;
     width: 30px;
@@ -402,18 +402,18 @@
   }
 
   .family-name {
-    font-size: 16px;
+    font-size: 18px;
     font-weight: 500;
     color: #eee;
   }
 
   .family-count {
-    font-size: 12px;
+    font-size: 14px;
     color: #888;
   }
 
   .family-toggle {
-    font-size: 12px;
+    font-size: 14px;
     color: #888;
     transition: transform 0.2s;
   }
@@ -468,7 +468,7 @@
   }
 
   .model-name {
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 500;
     color: #eee;
     display: flex;
@@ -477,13 +477,13 @@
   }
 
   .model-context {
-    font-size: 12px;
+    font-size: 14px;
     color: #888;
     font-weight: 400;
   }
 
   .model-free-tag {
-    font-size: 11px;
+    font-size: 13px;
     color: #4CAF50;
     font-weight: 500;
     background: rgba(76, 175, 80, 0.1);
@@ -493,7 +493,7 @@
   }
 
   .model-tools-tag {
-    font-size: 10px;
+    font-size: 12px;
     font-weight: bold;
     color: #00ff00;
     background: rgba(0, 255, 0, 0.2);
@@ -507,7 +507,7 @@
 
   .model-selected-indicator {
     color: #4CAF50;
-    font-size: 16px;
+    font-size: 18px;
     font-weight: bold;
     margin-left: 8px;
     flex-shrink: 0;
@@ -524,7 +524,7 @@
     align-items: center;
     justify-content: center;
     color: #eee;
-    font-size: 14px;
+    font-size: 16px;
   }
 
   .loading-spinner {

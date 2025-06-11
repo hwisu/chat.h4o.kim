@@ -215,7 +215,7 @@
 
   .role-modal-header h3 {
     margin: 0;
-    font-size: 18px;
+    font-size: 20px;
     color: #eee;
   }
 
@@ -223,7 +223,7 @@
     background: none;
     border: none;
     color: #888;
-    font-size: 24px;
+    font-size: 26px;
     cursor: pointer;
     padding: 0;
     width: 30px;
@@ -293,7 +293,7 @@
   }
 
   .category-icon {
-    font-size: 20px;
+    font-size: 22px;
   }
 
   .category-text {
@@ -304,18 +304,18 @@
   }
 
   .category-name {
-    font-size: 16px;
+    font-size: 18px;
     font-weight: 500;
     color: #eee;
   }
 
   .category-count {
-    font-size: 12px;
+    font-size: 14px;
     color: #888;
   }
 
   .category-toggle {
-    font-size: 12px;
+    font-size: 14px;
     color: #888;
     transition: transform 0.2s;
   }
@@ -370,7 +370,7 @@
   }
 
   .role-name {
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 500;
     color: #eee;
     margin-bottom: 4px;
@@ -380,11 +380,11 @@
   }
 
   .role-icon {
-    font-size: 16px;
+    font-size: 18px;
   }
 
   .role-description {
-    font-size: 12px;
+    font-size: 14px;
     color: #aaa;
     line-height: 1.4;
     overflow: hidden;
@@ -396,7 +396,7 @@
 
   .role-selected-indicator {
     color: #4CAF50;
-    font-size: 16px;
+    font-size: 18px;
     font-weight: bold;
     margin-left: 8px;
     flex-shrink: 0;
@@ -413,7 +413,7 @@
     align-items: center;
     justify-content: center;
     color: #eee;
-    font-size: 14px;
+    font-size: 16px;
   }
 
   .loading-spinner {

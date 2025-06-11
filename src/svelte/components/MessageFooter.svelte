@@ -51,7 +51,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 13px;
+    font-size: 15px;
     margin-top: 8px;
   }
 
@@ -66,7 +66,7 @@
     color: #ccc;
     padding: 4px 8px;
     border-radius: 4px;
-    font-size: 13px;
+    font-size: 15px;
     cursor: pointer;
     font-family: 'MonoplexKRNerd', monospace;
     transition: all 0.2s;

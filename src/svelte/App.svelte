@@ -137,6 +137,7 @@
     background: #000000;
     color: #ffffff;
     font-family: 'MonoplexKRNerd', monospace;
+    font-weight: 800;
     border: none;
     outline: none;
     margin: 0;

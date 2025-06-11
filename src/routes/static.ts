@@ -33,7 +33,7 @@ const DEV_FALLBACK_HTML = `
         }
         .title {
             color: #00ff00;
-            font-size: 24px;
+            font-size: 26px;
             margin-bottom: 20px;
         }
         .message {

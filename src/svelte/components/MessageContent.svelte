@@ -29,7 +29,7 @@
 <style>
   .message-content {
     line-height: 1.6;
-    font-size: 16px;
+    font-size: 18px;
     word-wrap: break-word;
     overflow-wrap: break-word;
     margin-bottom: 8px;

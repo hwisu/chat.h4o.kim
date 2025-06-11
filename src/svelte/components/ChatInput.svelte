@@ -148,7 +148,7 @@ import { uiState } from '../stores/ui.svelte';
     border: none;
     border-radius: 0;
     color: #eee;
-    font-size: 14px;
+    font-size: 16px;
     font-family: inherit;
     line-height: 1.5;
     padding: 12px 0;
@@ -193,7 +193,7 @@ import { uiState } from '../stores/ui.svelte';
     align-items: center;
     justify-content: center;
     transition: all 0.2s;
-    font-size: 18px;
+    font-size: 20px;
     font-weight: bold;
   }
 
@@ -232,7 +232,7 @@ import { uiState } from '../stores/ui.svelte';
     position: absolute;
     bottom: -20px;
     left: 16px;
-    font-size: 11px;
+    font-size: 13px;
     color: #666;
     pointer-events: none;
   }

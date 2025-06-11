@@ -224,7 +224,7 @@
 
   .auth-modal-header h3 {
     margin: 0;
-    font-size: 20px;
+    font-size: 22px;
     font-weight: 600;
     color: #fff;
   }
@@ -233,7 +233,7 @@
     background: none;
     border: none;
     color: #888;
-    font-size: 24px;
+    font-size: 26px;
     cursor: pointer;
     padding: 0;
     width: 30px;
@@ -336,14 +336,14 @@
   }
 
   .auth-method-title {
-    font-size: 16px;
+    font-size: 18px;
     font-weight: 500;
     color: #eee;
     line-height: 1.3;
   }
 
   .auth-method-description {
-    font-size: 13px;
+    font-size: 15px;
     color: #aaa;
     line-height: 1.4;
   }
@@ -373,7 +373,7 @@
     border-radius: 8px;
     padding: 12px 16px;
     color: #fff;
-    font-size: 14px;
+    font-size: 16px;
     transition: all 0.2s;
   }
 
@@ -391,7 +391,7 @@
 
   .api-key-help {
     color: #888;
-    font-size: 12px;
+    font-size: 14px;
     margin-top: -8px;
   }
 
@@ -410,7 +410,7 @@
     border: none;
     border-radius: 8px;
     padding: 14px 20px;
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
@@ -433,7 +433,7 @@
     border-radius: 8px;
     padding: 12px 16px;
     color: #ff6b6b;
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 500;
   }
 </style> 
