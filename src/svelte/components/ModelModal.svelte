@@ -11,24 +11,24 @@
   // 모델 ID에서 / 다음 첫 번째 단어 추출
   function extractModelPrefix(modelId: string): string {
     if (!modelId) return 'other';
-    
+
     const slashIndex = modelId.indexOf('/');
     if (slashIndex === -1) return 'other';
-    
+
     const afterSlash = modelId.substring(slashIndex + 1);
     const firstWord = afterSlash.split(/[-:\s]/)[0];
-    
+
     return firstWord.toLowerCase();
   }
 
   // prefix별 색상 (간단한 해시 기반)
   function getPrefixColor(prefix: string): string {
     if (prefix === 'other') return '#6b7280'; // 회색
-    
+
     // 단순한 해시로 일관된 색상 선택
     const colors = [
       '#3b82f6', // blue
-      '#10b981', // emerald  
+      '#10b981', // emerald
       '#ef4444', // red
       '#f59e0b', // amber
       '#8b5cf6', // violet
@@ -49,16 +49,26 @@
   // 모델을 prefix별로 그룹화 (4개 이상인 것만)
   let groupedModels = $derived(() => {
     const prefixCount: { [prefix: string]: any[] } = {};
-    
-    // 먼저 모든 prefix별로 모델 수집
+
+    // 먼저 모든 prefix별로 모델 수집 (tools를 지원하는 모델만)
     modelsState.available.forEach(model => {
+      // tools를 지원하지 않는 모델은 제외
+      if (!model.supportsTools) {
+        return;
+      }
+
+      // 컨텍스트가 100k 미만인 모델은 제외
+      if (!model.context_length || model.context_length < 100000) {
+        return;
+      }
+
       const modelId = model.id || '';
       const prefix = extractModelPrefix(modelId);
-      
+
       if (!prefixCount[prefix]) {
         prefixCount[prefix] = [];
       }
-      
+
       prefixCount[prefix].push(model);
     });
 
@@ -94,16 +104,16 @@
   // prefix 목록을 정렬 (모델 수가 많은 순, 그 다음 이름순, other는 항상 마지막)
   let sortedPrefixes = $derived(() => {
     const prefixes = Object.keys(groupedModels());
-    
+
     return prefixes.sort((a, b) => {
       // 'other'는 항상 마지막
       if (a === 'other') return 1;
       if (b === 'other') return -1;
-      
+
       // 모델 수가 많은 순
       const countDiff = (groupedModels()[b]?.length || 0) - (groupedModels()[a]?.length || 0);
       if (countDiff !== 0) return countDiff;
-      
+
       // 이름순
       return a.localeCompare(b);
     });
@@ -131,9 +141,9 @@
   async function selectModel(modelId: string) {
     try {
       isLoading = true;
-      
+
       const result = await apiClient.setModel(modelId);
-      
+
       if (result.success) {
         // 선택된 모델 정보 업데이트
         const selectedModel = modelsState.available.find(m => m.id === modelId);
@@ -148,7 +158,7 @@
             }
           });
         }
-        
+
         onSelect?.({ modelId });
       } else {
         // 에러는 모달에서 직접 처리하지 않고 상위에서 처리
@@ -181,8 +191,8 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div 
-  class="model-modal-backdrop" 
+<div
+  class="model-modal-backdrop"
   onclick={handleBackdropClick}
   onkeydown={handleKeydown}
   role="dialog"
@@ -211,7 +221,7 @@
           {@const prefixModels = groupedModels()[prefixId] || []}
           {#if prefixModels.length > 0}
             <div class="family-section">
-              <button 
+              <button
                 class="family-header"
                 onclick={() => toggleFamily(prefixId)}
                 aria-expanded={expandedFamilies.has(prefixId)}
@@ -227,11 +237,11 @@
                   ▼
                 </span>
               </button>
-              
+
               {#if expandedFamilies.has(prefixId)}
                 <div class="family-models">
                   {#each prefixModels as model}
-                    <button 
+                    <button
                       class="model-list-item {model.id === modelsState.selected ? 'selected' : ''}"
                       onclick={() => selectModel(model.id)}
                       disabled={isLoading}
@@ -241,7 +251,7 @@
                         <div class="model-name">
                           {formatModelName(model)}
                           {#if model.id && model.id.includes(':free')}
-                            <span class="model-free-tag">:free</span>
+                            <span class="model-free-tag">free</span>
                           {/if}
                           {#if model.supportsTools}
                             <span class="model-tools-tag" title="Supports function calling">t</span>
@@ -569,4 +579,4 @@
       padding-left: 12px;
     }
   }
-</style> 
+</style>
