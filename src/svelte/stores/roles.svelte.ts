@@ -1,12 +1,14 @@
 // Svelte 5 runes는 전역적으로 사용 가능
 
 export interface RoleInfo {
+  id: string;
   name: string;
-  description: string;
+  description?: string;
+  icon?: string;
 }
 
 export interface RoleState {
-  available: any[];
+  available: RoleInfo[];
   selected: string | null;
   selectedInfo: RoleInfo;
   isLoading: boolean;
@@ -16,8 +18,10 @@ const initialRoleState: RoleState = {
   available: [],
   selected: null,
   selectedInfo: {
-    name: '🤖 General Assistant',
-    description: 'General purpose AI assistant'
+    id: 'general-assistant',
+    name: 'General Assistant',
+    description: 'Honest feedback and fact‑based support, with a "search‑first" mindset',
+    icon: '🎯'
   },
   isLoading: false
 };
@@ -41,9 +45,9 @@ export function setRolesLoading(isLoading: boolean) {
   rolesState.isLoading = isLoading;
 }
 
-export function setAvailableRoles(roles: any[]) {
+export function setAvailableRoles(roles: RoleInfo[]) {
   rolesState.available = roles;
 }
 
 // 기존 호환성을 위한 별칭
-export const rolesStore = rolesState; 
+export const rolesStore = rolesState;

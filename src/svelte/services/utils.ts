@@ -76,6 +76,7 @@ export function createDefaultModelInfo() {
  */
 export function createDefaultRoleInfo() {
   return {
+    id: 'whoami',
     name: DEFAULT_VALUES.ROLE_NAME,
     description: DEFAULT_VALUES.ROLE_DESCRIPTION
   };
@@ -116,4 +117,4 @@ export function safeArrayAccess<T>(array: unknown, index: number): T | undefined
     return array[index];
   }
   return undefined;
-} 
+}

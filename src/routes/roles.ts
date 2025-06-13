@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { authRequired } from '../middleware/auth';
-import { AVAILABLE_ROLES, getPublicRoleInfo, getRoleById } from '../roles';
+import { AVAILABLE_ROLES, getPublicRoleInfo, getRoleById, DEFAULT_ROLE_ID } from '../roles';
 import type { Env } from '../types';
 import { ErrorStatus, RESPONSE_MESSAGES } from './constants';
 import { asyncHandler, errorResponse, parseJsonBody, successResponse } from './utils';
@@ -12,7 +12,7 @@ const userRoles = new Map<string, string>();
 
 // Helper functions
 function getUserRole(userId: string): string {
-  return userRoles.get(userId) || 'general';
+  return userRoles.get(userId) || DEFAULT_ROLE_ID;
 }
 
 function setUserRole(userId: string, roleId: string): void {
